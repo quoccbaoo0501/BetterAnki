@@ -16,6 +16,7 @@ const languages = [
   "Chinese",
   "Korean",
   "Arabic",
+  "Vietnamese",
 ]
 
 export default function LanguageSelector() {
