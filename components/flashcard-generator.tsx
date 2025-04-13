@@ -7,30 +7,50 @@ import FlashcardItem from "@/components/flashcard-item"
 import { Button } from "@/components/ui/button"
 import { generateFlashcards } from "@/lib/ai"
 import { saveFlashcards } from "@/lib/storage"
+import { getApiKey } from "@/components/llm-api-settings"
 
-export default function FlashcardGenerator({
-  nativeLanguage,
-  targetLanguage,
-  prompt,
-}: {
+// Define props type directly
+interface FlashcardGeneratorProps {
   nativeLanguage: string
   targetLanguage: string
   prompt: string
-}) {
+}
+
+export default function FlashcardGenerator({ nativeLanguage, targetLanguage, prompt }: FlashcardGeneratorProps) {
   const router = useRouter()
   const [flashcards, setFlashcards] = useState<Flashcard[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function fetchFlashcards() {
+      setIsLoading(true)
+      setError(null)
+
+      if (!prompt || prompt.trim() === '') {
+        console.error("Prompt is missing or empty in search parameters.")
+        setError("No prompt provided. Please go back and enter a topic or text.")
+        setIsLoading(false)
+        setFlashcards([])
+        return
+      }
+ 
       try {
-        const cards = await generateFlashcards(nativeLanguage, targetLanguage, prompt)
+        const apiKey = getApiKey()
+        const cards = await generateFlashcards(
+          nativeLanguage,
+          targetLanguage,
+          prompt,
+          apiKey,
+        )
         setFlashcards(cards)
         // By default, select all flashcards
         setSelectedIds(new Set(cards.map((card) => card.id)))
       } catch (error) {
         console.error("Failed to generate flashcards:", error)
+        setFlashcards([])
+        setError("Failed to generate flashcards. Please check your API key or try again.")
       } finally {
         setIsLoading(false)
       }
@@ -70,6 +90,14 @@ export default function FlashcardGenerator({
 
   if (isLoading) {
     return <p className="text-slate-600">Generating flashcards with AI...</p>
+  }
+
+  if (error) {
+    return <p className="text-red-600">Error: {error}</p>
+  }
+
+  if (!flashcards.length) {
+    return <p className="text-slate-600">No flashcards were generated. Try modifying your prompt.</p>
   }
 
   return (

@@ -1,12 +1,20 @@
 import { generateText } from "ai"
-import { openai } from "@ai-sdk/openai"
+import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import type { Flashcard } from "@/types/flashcard"
 
 export async function generateFlashcards(
   nativeLanguage: string,
   targetLanguage: string,
   prompt: string,
+  apiKey: string | null,
 ): Promise<Flashcard[]> {
+  if (!apiKey) {
+    console.warn("API key is missing. Please provide your Gemini API key in the settings.")
+    // Optionally, you could throw an error or return a specific error state
+    // throw new Error("API key is missing.");
+    return [] // Return empty array if no key
+  }
+
   try {
     // In a real implementation, you would use the Gemini AI here
     // For this example, we'll simulate the response with OpenAI
@@ -24,97 +32,38 @@ export async function generateFlashcards(
       }
     ]`
 
-    // In a real implementation, you would use Gemini AI here
-    // This is a simulation using OpenAI
+    // Create the provider instance with the API key
+    const googleProvider = createGoogleGenerativeAI({ apiKey })
+
     const { text } = await generateText({
-      model: openai("gpt-4o"),
+      // Use the provider instance and specify the model
+      model: googleProvider("models/gemini-2.5-pro-exp-03-25"),
       system: systemPrompt,
       prompt: prompt,
     })
 
-    // Parse the response as JSON
-    const flashcards: Flashcard[] = JSON.parse(text)
+    console.log("Raw AI Response Text:", text); // Keep this for debugging temporarily
 
+    // Clean the response: Remove markdown fences if they exist
+    let cleanedText = text.trim();
+    if (cleanedText.startsWith("```json")) {
+      cleanedText = cleanedText.substring(7); // Remove ```json
+    }
+    if (cleanedText.endsWith("```")) {
+      cleanedText = cleanedText.substring(0, cleanedText.length - 3); // Remove ```
+    }
+    cleanedText = cleanedText.trim(); // Trim any remaining whitespace
+
+    // Parse the cleaned response as JSON
+    const flashcards: Flashcard[] = JSON.parse(cleanedText)
+
+    console.log("Parsed Flashcards:", flashcards); // Keep for debugging
+    
     return flashcards
   } catch (error) {
     console.error("Error generating flashcards:", error)
 
-    // Return mock data for demonstration purposes
-    return getMockFlashcards(nativeLanguage, targetLanguage)
-  }
-}
-
-// Mock data for demonstration purposes
-function getMockFlashcards(nativeLanguage: string, targetLanguage: string): Flashcard[] {
-  if (targetLanguage === "French") {
-    return [
-      {
-        id: "1",
-        nativeWord: "Hello",
-        targetWord: "Bonjour",
-        nativeExample: "Hello, how are you?",
-        targetExample: "Bonjour, comment allez-vous?",
-      },
-      {
-        id: "2",
-        nativeWord: "Good morning",
-        targetWord: "Bon matin",
-        nativeExample: "Good morning, did you sleep well?",
-        targetExample: "Bon matin, avez-vous bien dormi?",
-      },
-      {
-        id: "3",
-        nativeWord: "Thank you",
-        targetWord: "Merci",
-        nativeExample: "Thank you for your help.",
-        targetExample: "Merci pour votre aide.",
-      },
-      {
-        id: "4",
-        nativeWord: "Please",
-        targetWord: "S'il vous plaît",
-        nativeExample: "Please, can you help me?",
-        targetExample: "S'il vous plaît, pouvez-vous m'aider?",
-      },
-      {
-        id: "5",
-        nativeWord: "Yes",
-        targetWord: "Oui",
-        nativeExample: "Yes, I understand.",
-        targetExample: "Oui, je comprends.",
-      },
-      {
-        id: "6",
-        nativeWord: "No",
-        targetWord: "Non",
-        nativeExample: "No, I don't want to.",
-        targetExample: "Non, je ne veux pas.",
-      },
-    ]
-  } else {
-    // Generic mock data for other languages
-    return [
-      {
-        id: "1",
-        nativeWord: "Hello",
-        targetWord: "Hello in " + targetLanguage,
-        nativeExample: "Hello, how are you?",
-        targetExample: "Example in " + targetLanguage,
-      },
-      {
-        id: "2",
-        nativeWord: "Good morning",
-        targetWord: "Good morning in " + targetLanguage,
-        nativeExample: "Good morning, did you sleep well?",
-        targetExample: "Example in " + targetLanguage,
-      },
-      {
-        id: "3",
-        nativeWord: "Thank you",
-        targetWord: "Thank you in " + targetLanguage,
-        nativeExample: "Thank you for your help.",
-        targetExample: "Example in " + targetLanguage,
-      },
-    ]
+    // Return an empty array or re-throw the error if preferred
+    return []
   }
 }

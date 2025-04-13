@@ -32,6 +32,7 @@ export default function PromptInput() {
         onChange={(e) => setPrompt(e.target.value)}
         placeholder="Describe what flashcards you want to generate..."
         className="min-h-[120px]"
+        required
       />
     </div>
   )
