@@ -6,7 +6,7 @@ import type { Flashcard } from "@/types/flashcard"
 import FlashcardItem from "@/components/flashcard-item"
 import { Button } from "@/components/ui/button"
 import { generateFlashcards } from "@/lib/ai"
-import { saveFlashcards } from "@/lib/storage"
+import { saveFlashcard } from "@/lib/storage"
 import { getApiKey } from "@/components/llm-api-settings"
 
 // Define props type directly
@@ -38,15 +38,22 @@ export default function FlashcardGenerator({ nativeLanguage, targetLanguage, pro
  
       try {
         const apiKey = getApiKey()
-        const cards = await generateFlashcards(
+        const generatedCards = await generateFlashcards(
           nativeLanguage,
           targetLanguage,
           prompt,
           apiKey,
         )
-        setFlashcards(cards)
+        // Add language properties to the generated cards
+        const cardsWithLanguage = generatedCards.map(card => ({
+            ...card,
+            nativeLanguage: nativeLanguage,
+            targetLanguage: targetLanguage
+        }))
+
+        setFlashcards(cardsWithLanguage)
         // By default, select all flashcards
-        setSelectedIds(new Set(cards.map((card) => card.id)))
+        setSelectedIds(new Set(cardsWithLanguage.map((card) => card.id)))
       } catch (error) {
         console.error("Failed to generate flashcards:", error)
         setFlashcards([])
@@ -81,8 +88,17 @@ export default function FlashcardGenerator({ nativeLanguage, targetLanguage, pro
 
   const saveSelectedFlashcards = () => {
     const selectedFlashcards = flashcards.filter((card) => selectedIds.has(card.id))
-    // Save to storage
-    saveFlashcards(selectedFlashcards)
+
+    // Save each selected flashcard individually using the new function
+    selectedFlashcards.forEach((card) => {
+        // Ensure the card has the language properties before saving
+        // (Should be guaranteed by the useEffect logic now)
+        if (card.nativeLanguage && card.targetLanguage) {
+            saveFlashcard(card)
+        } else {
+            console.warn("Attempted to save a card without language properties:", card);
+        }
+    })
 
     // Navigate to learn page
     router.push("/learn")
