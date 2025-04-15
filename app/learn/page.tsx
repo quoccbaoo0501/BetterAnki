@@ -5,19 +5,24 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import FlashcardItem from "@/components/flashcard-item"
 import { Button } from "@/components/ui/button"
 import type { Flashcard } from "@/types/flashcard"
-import { getSavedFlashcards } from "@/lib/storage"
-import { BookX } from "lucide-react"
+import { getSavedFlashcards, deleteFlashcards as deleteFlashcardsFromStorage } from "@/lib/storage"
+import { BookX, Trash2 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 
 export default function LearnPage() {
   const [flashcards, setFlashcards] = useState<Flashcard[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     // Load saved flashcards from storage
     const savedCards = getSavedFlashcards()
     setFlashcards(savedCards)
     setIsLoading(false)
+    // Reset selection when flashcards load/change
+    setSelectedIds(new Set())
   }, [])
 
   const nextCard = () => {
@@ -31,6 +36,42 @@ export default function LearnPage() {
       setCurrentIndex(currentIndex - 1)
     }
   }
+
+  const toggleFlashcard = (id: string) => {
+    setSelectedIds((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(id)) {
+        newSet.delete(id)
+      } else {
+        newSet.add(id)
+      }
+      return newSet
+    })
+  }
+
+  const selectAll = () => {
+    setSelectedIds(new Set(flashcards.map((card) => card.id)))
+  }
+
+  const deselectAll = () => {
+    setSelectedIds(new Set())
+  }
+
+  const deleteSelectedFlashcards = () => {
+    const idsToDelete = Array.from(selectedIds)
+    // Remove from local state
+    setFlashcards((prev) => prev.filter((card) => !selectedIds.has(card.id)))
+    // Remove from storage
+    deleteFlashcardsFromStorage(idsToDelete)
+    // Reset selection
+    setSelectedIds(new Set())
+    // Adjust current index if needed for study mode (optional, but good practice)
+    if (currentIndex >= flashcards.length - idsToDelete.length) {
+      setCurrentIndex(Math.max(0, flashcards.length - idsToDelete.length - 1))
+    }
+  }
+
+  const isAllSelected = flashcards.length > 0 && selectedIds.size === flashcards.length
 
   if (isLoading) {
     return (
@@ -91,15 +132,38 @@ export default function LearnPage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="browse">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <TabsContent value="browse" className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="select-all"
+                  checked={isAllSelected}
+                  onCheckedChange={(checked) => (checked ? selectAll() : deselectAll())}
+                />
+                <Label htmlFor="select-all" className="text-sm font-medium">
+                  Select All ({selectedIds.size} / {flashcards.length})
+                </Label>
+              </div>
+              <div className="ml-auto">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={deleteSelectedFlashcards}
+                  disabled={selectedIds.size === 0}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Selected
+                </Button>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {flashcards.map((card) => (
                 <FlashcardItem
                   key={card.id}
                   flashcard={card}
-                  isSelected={false}
-                  onToggle={() => {}}
-                  showCheckbox={false}
+                  isSelected={selectedIds.has(card.id)}
+                  onToggle={() => toggleFlashcard(card.id)}
+                  showCheckbox={true}
                 />
               ))}
             </div>

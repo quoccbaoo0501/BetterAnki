@@ -41,6 +41,18 @@ export function getSavedFlashcards(): Flashcard[] {
   }
 }
 
+export function deleteFlashcards(idsToDelete: string[]): void {
+  if (typeof window === "undefined") return
+
+  try {
+    const existingFlashcards = getSavedFlashcards()
+    const updatedFlashcards = existingFlashcards.filter((card) => !idsToDelete.includes(card.id))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedFlashcards))
+  } catch (error) {
+    console.error("Error deleting flashcards:", error)
+  }
+}
+
 export function clearFlashcards(): void {
   if (typeof window === "undefined") return
 
