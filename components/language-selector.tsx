@@ -48,11 +48,13 @@ export default function LanguageSelector() {
             <SelectValue placeholder="Select language to learn" />
           </SelectTrigger>
           <SelectContent>
-            {languages.map((lang) => (
-              <SelectItem key={`target-${lang}`} value={lang}>
-                {lang}
-              </SelectItem>
-            ))}
+            {languages
+              .filter((lang) => lang !== nativeLanguage)
+              .map((lang) => (
+                <SelectItem key={`target-${lang}`} value={lang}>
+                  {lang}
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
       </div>
