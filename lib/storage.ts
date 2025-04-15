@@ -87,9 +87,9 @@ export function getNativeLanguagesForTarget(targetLanguage: string): string[] {
   return data[targetLanguage] ? Object.keys(data[targetLanguage]) : []
 }
 
-
 /**
  * Deletes specific flashcards identified by their IDs from a given language pair.
+ * Cleans up empty language categories after deletion.
  */
 export function deleteFlashcards(targetLanguage: string, nativeLanguage: string, idsToDelete: string[]): void {
   if (typeof window === "undefined") return
@@ -97,17 +97,19 @@ export function deleteFlashcards(targetLanguage: string, nativeLanguage: string,
   try {
     const data = getStorageData()
     if (data[targetLanguage]?.[nativeLanguage]) {
+      // Filter out the cards to delete
       data[targetLanguage][nativeLanguage] = data[targetLanguage][nativeLanguage].filter(
         (card) => !idsToDelete.includes(card.id)
       )
 
-      // Optional: Clean up empty arrays/objects if desired
-      // if (data[targetLanguage][nativeLanguage].length === 0) {
-      //   delete data[targetLanguage][nativeLanguage];
-      //   if (Object.keys(data[targetLanguage]).length === 0) {
-      //     delete data[targetLanguage];
-      //   }
-      // }
+      // Clean up empty native language array
+      if (data[targetLanguage][nativeLanguage].length === 0) {
+        delete data[targetLanguage][nativeLanguage];
+        // Clean up empty target language object if necessary
+        if (Object.keys(data[targetLanguage]).length === 0) {
+          delete data[targetLanguage];
+        }
+      }
 
       saveStorageData(data)
     }
