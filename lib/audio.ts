@@ -31,6 +31,7 @@ export function getLanguageCode(language: string): string {
     Chinese: "zh",
     Korean: "ko",
     Arabic: "ar",
+    Vietnamese: "vi",
   }
 
   return languageMap[language] || language

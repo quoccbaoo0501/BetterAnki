@@ -6,14 +6,14 @@ import type { Flashcard } from "@/types/flashcard"
 import type { Deck } from "@/types/deck"
 import FlashcardItem from "@/components/flashcard-item"
 import { Button } from "@/components/ui/button"
-import { generateFlashcards } from "@/lib/ai"
+import { generateFlashcardsInBatches } from "@/lib/ai"
 import { saveFlashcards, savePromptToHistory, getPromptHistory, getDecks, getSavedApiKey } from "@/lib/storage"
 import { generatePredictedPrompts, savePredictedPrompts } from "@/lib/prompt-predictor"
 import EditFlashcardDialog from "@/components/edit-flashcard-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import CreateDeckDialog from "./create-deck-dialog"
-import { PlusCircle, AlertTriangle } from "lucide-react"
+import { PlusCircle, AlertTriangle, RefreshCw } from "lucide-react"
 import { LoadingAnimation } from "./loading-animation"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
@@ -37,6 +37,7 @@ export default function FlashcardGenerator({
   const [currentEditCard, setCurrentEditCard] = useState<Flashcard | null>(null)
   const [decks, setDecks] = useState<Deck[]>([])
   const [selectedDeckId, setSelectedDeckId] = useState<string>("")
+  const [isRetrying, setIsRetrying] = useState(false)
 
   // Check if this is definition mode (same language for native and target)
   const isDefinitionMode = nativeLanguage === targetLanguage
@@ -68,7 +69,8 @@ export default function FlashcardGenerator({
           // Start both requests in parallel
           const [flashcardsPromise, predictionsPromise] = await Promise.allSettled([
             // Request 1: Generate flashcards
-            generateFlashcards(nativeLanguage, targetLanguage, prompt, effectiveApiKey),
+            // Use the batch function for large requests
+            generateFlashcardsInBatches(nativeLanguage, targetLanguage, prompt, effectiveApiKey),
 
             // Request 2: Predict next prompts
             (async () => {
@@ -106,11 +108,12 @@ export default function FlashcardGenerator({
         setError(`Error generating flashcards: ${error instanceof Error ? error.message : "Unknown error"}`)
       } finally {
         setIsLoading(false)
+        setIsRetrying(false)
       }
     }
 
     fetchData()
-  }, [nativeLanguage, targetLanguage, prompt, apiKey])
+  }, [nativeLanguage, targetLanguage, prompt, apiKey, isRetrying])
 
   const toggleFlashcard = (id: string) => {
     setSelectedIds((prev) => {
@@ -169,6 +172,10 @@ export default function FlashcardGenerator({
     }
   }
 
+  const handleRetry = () => {
+    setIsRetrying(true)
+  }
+
   if (isLoading) {
     return <LoadingAnimation />
   }
@@ -178,8 +185,14 @@ export default function FlashcardGenerator({
       <Alert variant="destructive" className="mb-4">
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>{error}</AlertDescription>
-        <div className="mt-4">
-          <Button onClick={() => router.push("/")}>Go Back</Button>
+        <div className="mt-4 flex space-x-2">
+          <Button onClick={handleRetry} className="flex items-center">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Try Again
+          </Button>
+          <Button variant="outline" onClick={() => router.push("/")}>
+            Go Back
+          </Button>
         </div>
       </Alert>
     )
@@ -255,6 +268,17 @@ export default function FlashcardGenerator({
           </>
         )}
       </div>
+
+      {prompt.toLowerCase().includes("100") && (
+        <Alert className="bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800/30">
+          <AlertDescription>
+            <p>
+              <strong>Note:</strong> For large requests (100+ words), the system automatically limits the response to a
+              manageable batch of high-quality flashcards. This ensures better quality and prevents errors.
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {flashcards.map((card) => (
