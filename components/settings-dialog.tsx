@@ -13,12 +13,14 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface SettingsDialogProps {
   trigger?: React.ReactNode
+  onApiKeySaved?: (apiKey: string) => void
 }
 
-export default function SettingsDialog({ trigger }: SettingsDialogProps) {
+export default function SettingsDialog({ trigger, onApiKeySaved }: SettingsDialogProps) {
   const [open, setOpen] = useState(false)
   const [apiKey, setApiKey] = useState("")
   const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     if (open && typeof window !== "undefined") {
@@ -41,13 +43,29 @@ export default function SettingsDialog({ trigger }: SettingsDialogProps) {
 
   const handleSaveApiKey = () => {
     if (apiKey) {
-      saveApiKey(apiKey)
-      setSaveMessage({ type: "success", text: "API key saved successfully!" })
+      setIsSaving(true)
 
-      // Clear the message after 3 seconds
+      // Save the API key
+      saveApiKey(apiKey)
+
+      // Verify it was actually saved
       setTimeout(() => {
-        setSaveMessage(null)
-      }, 3000)
+        const savedKey = getSavedApiKey()
+        if (savedKey === apiKey) {
+          setSaveMessage({ type: "success", text: "API key saved successfully!" })
+          if (onApiKeySaved) {
+            onApiKeySaved(apiKey)
+          }
+        } else {
+          setSaveMessage({ type: "error", text: "Failed to save API key. Please try again." })
+        }
+        setIsSaving(false)
+
+        // Clear the message after 3 seconds
+        setTimeout(() => {
+          setSaveMessage(null)
+        }, 3000)
+      }, 500)
     } else {
       setSaveMessage({ type: "error", text: "Please enter an API key" })
     }
@@ -133,8 +151,9 @@ export default function SettingsDialog({ trigger }: SettingsDialogProps) {
                   size="sm"
                   onClick={handleSaveApiKey}
                   className="flex items-center"
+                  disabled={isSaving}
                 >
-                  <Save className="h-4 w-4 mr-2" />
+                  {isSaving ? <span className="animate-spin mr-2">⏳</span> : <Save className="h-4 w-4 mr-2" />}
                   Save Key
                 </Button>
 

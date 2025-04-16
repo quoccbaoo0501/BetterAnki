@@ -28,6 +28,7 @@ export default function Home() {
       timestamp: number
     }>
   >([])
+  const [apiKeySet, setApiKeySet] = useState(false)
 
   useEffect(() => {
     // Only run on the client side
@@ -35,11 +36,19 @@ export default function Home() {
       // Load prompt history
       const history = getPromptHistory()
       setPromptHistory(history)
+
+      // Check if API key is set
+      const apiKey = getSavedApiKey()
+      setApiKeySet(!!apiKey)
     }
   }, [])
 
   const handlePromptSelect = (selectedPrompt: string) => {
     setPrompt(selectedPrompt)
+  }
+
+  const handleApiKeySaved = (apiKey: string) => {
+    setApiKeySet(true)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -78,6 +87,7 @@ export default function Home() {
                     Open Settings
                   </Button>
                 }
+                onApiKeySaved={handleApiKeySaved}
               />
             </AlertDescription>
           </Alert>
@@ -118,9 +128,26 @@ export default function Home() {
             </div>
           )}
 
+          {!apiKeySet && (
+            <Alert className="mb-4">
+              <AlertDescription>
+                You need to set your API key before generating flashcards.{" "}
+                <SettingsDialog
+                  trigger={
+                    <Button variant="link" className="p-0 h-auto">
+                      Open Settings
+                    </Button>
+                  }
+                  onApiKeySaved={handleApiKeySaved}
+                />
+              </AlertDescription>
+            </Alert>
+          )}
+
           <Button
             type="submit"
             className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors"
+            disabled={!apiKeySet}
           >
             Generate Flashcards
           </Button>

@@ -1,32 +1,97 @@
-import { Suspense } from "react"
-import { redirect } from "next/navigation"
+"use client"
+
+import { useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import FlashcardGenerator from "@/components/flashcard-generator"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { getSavedApiKey } from "@/lib/storage"
 import { LoadingAnimation } from "@/components/loading-animation"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
+import SettingsDialog from "@/components/settings-dialog"
 
-export default function GeneratePage({
-  searchParams,
-}: {
-  searchParams: { nativeLanguage: string; targetLanguage: string; prompt: string; apiKey?: string }
-}) {
-  const { nativeLanguage, targetLanguage, prompt, apiKey: urlApiKey } = searchParams
+export default function GeneratePage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const nativeLanguage = searchParams.get("nativeLanguage") || ""
+  const targetLanguage = searchParams.get("targetLanguage") || ""
+  const prompt = searchParams.get("prompt") || ""
+  const urlApiKey = searchParams.get("apiKey") || ""
 
-  // Use the API key from URL or fall back to the stored one
-  const apiKey = urlApiKey || getSavedApiKey()
+  const [apiKey, setApiKey] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   // Check if this is definition mode (same language for native and target)
   const isDefinitionMode = nativeLanguage === targetLanguage
 
   // Validate required parameters
-  if (!nativeLanguage || !targetLanguage || !prompt) {
-    redirect("/")
+  useEffect(() => {
+    if (!nativeLanguage || !targetLanguage || !prompt) {
+      router.push("/")
+      return
+    }
+
+    // Check for API key on client side
+    const savedApiKey = getSavedApiKey()
+    if (urlApiKey) {
+      setApiKey(urlApiKey)
+      setIsLoading(false)
+    } else if (savedApiKey) {
+      setApiKey(savedApiKey)
+      setIsLoading(false)
+    } else {
+      setError("noApiKey")
+      setIsLoading(false)
+    }
+  }, [nativeLanguage, targetLanguage, prompt, urlApiKey, router])
+
+  if (isLoading) {
+    return <LoadingAnimation />
   }
 
-  // If no API key is available, redirect back to the home page
-  if (!apiKey) {
-    redirect("/?error=noApiKey")
+  if (error === "noApiKey") {
+    return (
+      <div className="w-full max-w-md mx-auto">
+        <div className="mb-6">
+          <Link href="/" className="flex items-center text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to create
+          </Link>
+        </div>
+
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>
+            Please set your API key in the settings first.{" "}
+            <SettingsDialog
+              trigger={
+                <Button variant="link" className="p-0 h-auto">
+                  Open Settings
+                </Button>
+              }
+            />
+          </AlertDescription>
+        </Alert>
+
+        <div className="mt-4">
+          <Button
+            onClick={() => {
+              // Check again after settings might have been updated
+              const newApiKey = getSavedApiKey()
+              if (newApiKey) {
+                setApiKey(newApiKey)
+                setError(null)
+              } else {
+                router.push("/?error=noApiKey")
+              }
+            }}
+          >
+            Try Again
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -55,19 +120,15 @@ export default function GeneratePage({
           <p className="text-sm text-muted-foreground/80 mt-1">Prompt: {prompt}</p>
         </div>
 
-        <Suspense fallback={<FlashcardLoading />}>
+        {apiKey && (
           <FlashcardGenerator
             nativeLanguage={nativeLanguage}
             targetLanguage={targetLanguage}
             prompt={prompt}
             apiKey={apiKey}
           />
-        </Suspense>
+        )}
       </div>
     </div>
   )
-}
-
-function FlashcardLoading() {
-  return <LoadingAnimation />
 }

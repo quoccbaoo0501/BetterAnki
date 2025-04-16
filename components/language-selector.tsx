@@ -19,6 +19,7 @@ const languages = [
   "Chinese",
   "Korean",
   "Arabic",
+  "Vietnamese",
 ]
 
 interface LanguageSelectorProps {
