@@ -18,6 +18,7 @@ interface EditFlashcardDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onFlashcardUpdated: () => void
+  isDefinitionMode?: boolean
 }
 
 export default function EditFlashcardDialog({
@@ -27,6 +28,7 @@ export default function EditFlashcardDialog({
   open,
   onOpenChange,
   onFlashcardUpdated,
+  isDefinitionMode = false,
 }: EditFlashcardDialogProps) {
   const [nativeWord, setNativeWord] = useState("")
   const [targetWord, setTargetWord] = useState("")
@@ -71,45 +73,52 @@ export default function EditFlashcardDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-4">
           <div className="space-y-2">
-            <Label htmlFor="native-word">{nativeLanguage} Word</Label>
+            <Label htmlFor="native-word">{isDefinitionMode ? "Word" : `${nativeLanguage} Word`}</Label>
             <Input
               id="native-word"
               value={nativeWord}
               onChange={(e) => setNativeWord(e.target.value)}
-              placeholder="Enter word in your language"
+              placeholder={isDefinitionMode ? "Enter word" : `Enter word in your language`}
               required
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="target-word">{targetLanguage} Word</Label>
-            <Input
+            <Label htmlFor="target-word">{isDefinitionMode ? "Definition" : `${targetLanguage} Word`}</Label>
+            <Textarea
               id="target-word"
               value={targetWord}
               onChange={(e) => setTargetWord(e.target.value)}
-              placeholder="Enter word in target language"
+              placeholder={isDefinitionMode ? "Enter definition" : `Enter word in target language`}
               required
+              rows={isDefinitionMode ? 3 : 1}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="native-example">Example in {nativeLanguage} (Optional)</Label>
+            <Label htmlFor="native-example">
+              {isDefinitionMode ? "Example Sentence" : `Example in ${nativeLanguage}`} (Optional)
+            </Label>
             <Textarea
               id="native-example"
               value={nativeExample}
               onChange={(e) => setNativeExample(e.target.value)}
-              placeholder="Example sentence in your language"
+              placeholder={isDefinitionMode ? "Example sentence using the word" : `Example sentence in your language`}
               rows={2}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="target-example">Example in {targetLanguage} (Optional)</Label>
+            <Label htmlFor="target-example">
+              {isDefinitionMode ? "Second Example Sentence" : `Example in ${targetLanguage}`} (Optional)
+            </Label>
             <Textarea
               id="target-example"
               value={targetExample}
               onChange={(e) => setTargetExample(e.target.value)}
-              placeholder="Example sentence in target language"
+              placeholder={
+                isDefinitionMode ? "Second example sentence using the word" : `Example sentence in target language`
+              }
               rows={2}
             />
           </div>

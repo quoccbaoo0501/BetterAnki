@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import Navigation from "@/components/navigation"
+import { ThemeProvider } from "@/components/theme-provider"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -18,12 +19,14 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <div className="flex min-h-screen flex-col bg-gradient-to-b from-slate-50 to-slate-100">
-          <Navigation />
-          <main className="flex-1 p-4 md:p-6">{children}</main>
-        </div>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <div className="flex min-h-screen flex-col bg-gradient-to-b from-background to-muted/50">
+            <Navigation />
+            <main className="flex-1 p-4 md:p-6">{children}</main>
+          </div>
+        </ThemeProvider>
       </body>
     </html>
   )

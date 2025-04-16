@@ -50,7 +50,10 @@ export default function LearnPage() {
   const [deckManagementOpen, setDeckManagementOpen] = useState(false)
   const [cardCounts, setCardCounts] = useState<Record<string, number>>({})
 
-  // Load available language pairs
+  // Check if this is definition mode (same language for native and target)
+  const isDefinitionMode = nativeLanguage === targetLanguage
+
+  // Load available language pairs - only once on initial render
   useEffect(() => {
     if (typeof window !== "undefined") {
       const pairs = getAvailableLanguagePairs()
@@ -61,10 +64,12 @@ export default function LearnPage() {
         setNativeLanguage(pairs[0].native)
         setTargetLanguage(pairs[0].target)
       }
-    }
-  }, [nativeLanguage, targetLanguage])
 
-  // Load decks and flashcards when language pair changes
+      setIsLoading(false)
+    }
+  }, []) // Empty dependency array to run only once
+
+  // Load decks when language pair changes
   useEffect(() => {
     if (typeof window !== "undefined" && nativeLanguage && targetLanguage) {
       // Get all decks
@@ -85,8 +90,7 @@ export default function LearnPage() {
       const counts = getFlashcardCountByDeck(nativeLanguage, targetLanguage)
       setCardCounts(counts)
     }
-    setIsLoading(false)
-  }, [nativeLanguage, targetLanguage])
+  }, [nativeLanguage, targetLanguage, selectedDeckId])
 
   // Load flashcards when deck changes
   useEffect(() => {
@@ -271,8 +275,12 @@ export default function LearnPage() {
         </div>
 
         <div className="text-center py-8">
-          <h2 className="text-xl font-semibold text-slate-800 mb-4">No Decks Available</h2>
-          <p className="text-slate-600 mb-6">You need to create a deck before you can add or view flashcards.</p>
+          <h2 className="text-xl font-semibold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent dark:from-emerald-400 dark:to-blue-400 mb-4">
+            No Decks Available
+          </h2>
+          <p className="text-slate-600 dark:text-slate-400 mb-6">
+            You need to create a deck before you can add or view flashcards.
+          </p>
 
           <CreateDeckDialog
             nativeLanguage={nativeLanguage}
@@ -313,15 +321,20 @@ export default function LearnPage() {
 
         <div className="text-center py-8">
           <BookX className="h-12 w-12 mx-auto text-slate-400 mb-4" />
-          <h2 className="text-xl font-semibold text-slate-800 mb-2">No flashcards in this deck</h2>
-          <p className="text-slate-600 mb-6">You don't have any flashcards in this deck yet.</p>
+          <h2 className="text-xl font-semibold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent dark:from-emerald-400 dark:to-blue-400 mb-2">
+            No flashcards in this deck
+          </h2>
+          <p className="text-slate-600 dark:text-slate-400 mb-6">You don't have any flashcards in this deck yet.</p>
 
           <div className="flex flex-col space-y-4 items-center">
             <Button asChild>
               <a
                 href={`/?nativeLanguage=${encodeURIComponent(nativeLanguage)}&targetLanguage=${encodeURIComponent(targetLanguage)}`}
               >
-                Create {nativeLanguage} to {targetLanguage} Flashcards
+                Create{" "}
+                {isDefinitionMode
+                  ? `${nativeLanguage} Vocabulary`
+                  : `${nativeLanguage} to ${targetLanguage} Flashcards`}
               </a>
             </Button>
 
@@ -349,7 +362,9 @@ export default function LearnPage() {
         </div>
 
         <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-slate-800">Spaced Repetition Review</h1>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent dark:from-emerald-400 dark:to-blue-400">
+            Spaced Repetition Review
+          </h1>
 
           <SpacedRepetitionReview
             flashcards={dueFlashcards}
@@ -366,7 +381,9 @@ export default function LearnPage() {
     <div className="w-full max-w-md mx-auto">
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-slate-800">Learn Flashcards</h1>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent dark:from-emerald-400 dark:to-blue-400">
+            Learn Flashcards
+          </h1>
 
           <div className="flex space-x-2">
             <Dialog open={deckManagementOpen} onOpenChange={setDeckManagementOpen}>
@@ -431,7 +448,11 @@ export default function LearnPage() {
           />
 
           {dueFlashcards.length > 0 && (
-            <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={startReview}>
+            <Button
+              size="sm"
+              className="bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-700 dark:hover:bg-amber-600"
+              onClick={startReview}
+            >
               <Clock className="h-4 w-4 mr-2" />
               Review {dueFlashcards.length} Cards
             </Button>
@@ -439,10 +460,12 @@ export default function LearnPage() {
         </div>
 
         {dueFlashcards.length > 0 && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 dark:bg-amber-950/20 dark:border-amber-900/50">
             <div className="flex items-center">
-              <Clock className="h-4 w-4 text-amber-600 mr-2" />
-              <span className="text-amber-800 font-medium">{dueFlashcards.length} cards due for review</span>
+              <Clock className="h-4 w-4 text-amber-600 dark:text-amber-500 mr-2" />
+              <span className="text-amber-800 dark:text-amber-400 font-medium">
+                {dueFlashcards.length} cards due for review
+              </span>
             </div>
           </div>
         )}
@@ -492,6 +515,7 @@ export default function LearnPage() {
                   onToggle={() => toggleCardForDeletion(card.id)}
                   showCheckbox={true}
                   targetLanguage={targetLanguage}
+                  isDefinitionMode={isDefinitionMode}
                 />
               ))}
             </div>
@@ -520,6 +544,7 @@ export default function LearnPage() {
                       showCheckbox={false}
                       targetLanguage={targetLanguage}
                       onEdit={handleEditCard}
+                      isDefinitionMode={isDefinitionMode}
                     />
                   </div>
 
@@ -548,6 +573,7 @@ export default function LearnPage() {
                     showCheckbox={false}
                     targetLanguage={targetLanguage}
                     onEdit={handleEditCard}
+                    isDefinitionMode={isDefinitionMode}
                   />
                 ))}
               </div>
@@ -564,6 +590,7 @@ export default function LearnPage() {
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         onFlashcardUpdated={refreshFlashcards}
+        isDefinitionMode={isDefinitionMode}
       />
     </div>
   )

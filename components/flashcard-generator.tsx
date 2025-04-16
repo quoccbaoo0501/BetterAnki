@@ -7,13 +7,15 @@ import type { Deck } from "@/types/deck"
 import FlashcardItem from "@/components/flashcard-item"
 import { Button } from "@/components/ui/button"
 import { generateFlashcards } from "@/lib/ai"
-import { saveFlashcards, savePromptToHistory, getPromptHistory, getDecks } from "@/lib/storage"
+import { saveFlashcards, savePromptToHistory, getPromptHistory, getDecks, getSavedApiKey } from "@/lib/storage"
 import { generatePredictedPrompts, savePredictedPrompts } from "@/lib/prompt-predictor"
 import EditFlashcardDialog from "@/components/edit-flashcard-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import CreateDeckDialog from "./create-deck-dialog"
-import { PlusCircle } from "lucide-react"
+import { PlusCircle, AlertTriangle } from "lucide-react"
+import { LoadingAnimation } from "./loading-animation"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function FlashcardGenerator({
   nativeLanguage,
@@ -30,15 +32,20 @@ export default function FlashcardGenerator({
   const [flashcards, setFlashcards] = useState<Flashcard[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [currentEditCard, setCurrentEditCard] = useState<Flashcard | null>(null)
   const [decks, setDecks] = useState<Deck[]>([])
   const [selectedDeckId, setSelectedDeckId] = useState<string>("")
 
+  // Check if this is definition mode (same language for native and target)
+  const isDefinitionMode = nativeLanguage === targetLanguage
+
   useEffect(() => {
     async function fetchData() {
       try {
         setIsLoading(true)
+        setError(null)
 
         if (typeof window !== "undefined") {
           // Load available decks
@@ -55,15 +62,23 @@ export default function FlashcardGenerator({
           // Save the prompt to history first
           savePromptToHistory(prompt, nativeLanguage, targetLanguage)
 
+          // Get the effective API key (passed in or from storage)
+          const effectiveApiKey = apiKey || getSavedApiKey()
+
           // Start both requests in parallel
           const [flashcardsPromise, predictionsPromise] = await Promise.allSettled([
             // Request 1: Generate flashcards
-            generateFlashcards(nativeLanguage, targetLanguage, prompt, apiKey),
+            generateFlashcards(nativeLanguage, targetLanguage, prompt, effectiveApiKey),
 
             // Request 2: Predict next prompts
             (async () => {
               const history = getPromptHistory()
-              const predictions = await generatePredictedPrompts(history, nativeLanguage, targetLanguage, apiKey)
+              const predictions = await generatePredictedPrompts(
+                history,
+                nativeLanguage,
+                targetLanguage,
+                effectiveApiKey,
+              )
               // Save predictions to cache for use in the UI
               savePredictedPrompts(predictions)
               return predictions
@@ -78,6 +93,7 @@ export default function FlashcardGenerator({
             setSelectedIds(new Set(cards.map((card) => card.id)))
           } else {
             console.error("Failed to generate flashcards:", flashcardsPromise.reason)
+            setError(`Failed to generate flashcards: ${flashcardsPromise.reason.message || "Unknown error"}`)
           }
 
           // Handle predictions result (logging only, UI updates via cache)
@@ -87,6 +103,7 @@ export default function FlashcardGenerator({
         }
       } catch (error) {
         console.error("Error in fetchData:", error)
+        setError(`Error generating flashcards: ${error instanceof Error ? error.message : "Unknown error"}`)
       } finally {
         setIsLoading(false)
       }
@@ -153,7 +170,19 @@ export default function FlashcardGenerator({
   }
 
   if (isLoading) {
-    return <p className="text-slate-600">Generating flashcards with AI...</p>
+    return <LoadingAnimation />
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive" className="mb-4">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertDescription>{error}</AlertDescription>
+        <div className="mt-4">
+          <Button onClick={() => router.push("/")}>Go Back</Button>
+        </div>
+      </Alert>
+    )
   }
 
   return (
@@ -167,10 +196,10 @@ export default function FlashcardGenerator({
         </Button>
       </div>
 
-      <div className="p-4 border rounded-lg bg-slate-50">
+      <div className="p-4 border rounded-lg bg-muted/50">
         {decks.length === 0 ? (
           <div className="text-center py-2">
-            <p className="text-slate-600 mb-4">You need to create a deck before saving flashcards.</p>
+            <p className="text-muted-foreground mb-4">You need to create a deck before saving flashcards.</p>
             <CreateDeckDialog
               nativeLanguage={nativeLanguage}
               targetLanguage={targetLanguage}
@@ -237,6 +266,7 @@ export default function FlashcardGenerator({
             showCheckbox={true}
             targetLanguage={targetLanguage}
             onEdit={handleEditCard}
+            isDefinitionMode={isDefinitionMode}
           />
         ))}
       </div>
@@ -249,6 +279,7 @@ export default function FlashcardGenerator({
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         onFlashcardUpdated={handleCardUpdated}
+        isDefinitionMode={isDefinitionMode}
       />
     </div>
   )

@@ -10,6 +10,7 @@ const PROMPT_HISTORY_KEY = `${BASE_STORAGE_KEY}_promptHistory`
 const LANGUAGE_PAIRS_HISTORY_KEY = `${BASE_STORAGE_KEY}_languagePairsHistory`
 const REPETITION_CONFIG_KEY = `${BASE_STORAGE_KEY}_repetitionConfig`
 const DECKS_KEY = `${BASE_STORAGE_KEY}_decks`
+const API_KEY_STORAGE_KEY = `${BASE_STORAGE_KEY}_apiKey`
 
 // Get storage key for a specific language pair
 function getStorageKey(nativeLanguage: string, targetLanguage: string): string {
@@ -576,5 +577,39 @@ export function getOrCreateDefaultDeck(nativeLanguage: string, targetLanguage: s
       createdAt: Date.now(),
       updatedAt: Date.now(),
     }
+  }
+}
+
+// Save API key
+export function saveApiKey(apiKey: string): void {
+  if (typeof window === "undefined") return
+
+  try {
+    localStorage.setItem(API_KEY_STORAGE_KEY, apiKey)
+  } catch (error) {
+    console.error("Error saving API key:", error)
+  }
+}
+
+// Get saved API key
+export function getSavedApiKey(): string {
+  if (typeof window === "undefined") return ""
+
+  try {
+    return localStorage.getItem(API_KEY_STORAGE_KEY) || ""
+  } catch (error) {
+    console.error("Error retrieving API key:", error)
+    return ""
+  }
+}
+
+// Clear saved API key
+export function clearApiKey(): void {
+  if (typeof window === "undefined") return
+
+  try {
+    localStorage.removeItem(API_KEY_STORAGE_KEY)
+  } catch (error) {
+    console.error("Error clearing API key:", error)
   }
 }

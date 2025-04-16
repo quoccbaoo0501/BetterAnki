@@ -1,3 +1,5 @@
+import { getSavedApiKey } from "./storage"
+
 // This function generates predicted prompts using Gemini AI
 export async function generatePredictedPrompts(
   history: Array<{
@@ -10,8 +12,11 @@ export async function generatePredictedPrompts(
   currentTargetLanguage?: string,
   apiKey?: string,
 ): Promise<string[]> {
+  // Get the effective API key (passed in or from storage)
+  const effectiveApiKey = apiKey || getSavedApiKey()
+
   // If there's no API key or history, return some default suggestions
-  if (!apiKey || history.length === 0) {
+  if (!effectiveApiKey || history.length === 0) {
     return ["Add 20 most common greetings", "Basic travel phrases and vocabulary", "Food and restaurant vocabulary"]
   }
 
@@ -52,7 +57,7 @@ Generate 3 new, creative prompt suggestions that would be useful for language le
 ["suggestion 1", "suggestion 2", "suggestion 3"]`
 
     // Make request to Gemini API
-    const response = await fetch(`${endpoint}?key=${apiKey}`, {
+    const response = await fetch(`${endpoint}?key=${effectiveApiKey}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

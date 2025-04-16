@@ -31,6 +31,9 @@ export default function SpacedRepetitionReview({
 
   const currentCard = flashcards[currentIndex]
 
+  // Check if this is definition mode (same language for native and target)
+  const isDefinitionMode = nativeLanguage === targetLanguage
+
   useEffect(() => {
     if (currentIndex >= flashcards.length) {
       setIsReviewComplete(true)
@@ -52,7 +55,7 @@ export default function SpacedRepetitionReview({
 
   const handleSpeakClick = () => {
     if (speechSupported) {
-      speakText(currentCard.targetWord, targetLanguage)
+      speakText(isDefinitionMode ? currentCard.nativeWord : currentCard.targetWord, targetLanguage)
     }
   }
 
@@ -64,8 +67,10 @@ export default function SpacedRepetitionReview({
   if (isReviewComplete) {
     return (
       <div className="text-center py-8">
-        <h3 className="text-xl font-semibold mb-4">Review Complete!</h3>
-        <p className="text-slate-600 mb-6">You've reviewed all the cards due for today.</p>
+        <h3 className="text-xl font-semibold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent dark:from-emerald-400 dark:to-blue-400 mb-4">
+          Review Complete!
+        </h3>
+        <p className="text-slate-600 dark:text-slate-400 mb-6">You've reviewed all the cards due for today.</p>
         <Button onClick={onComplete}>Back to Learn</Button>
       </div>
     )
@@ -100,14 +105,25 @@ export default function SpacedRepetitionReview({
                 <p className="text-sm text-slate-600 italic">{currentCard.nativeExample}</p>
               )}
               <Button variant="ghost" className="mt-6" onClick={flipCard}>
-                Show Answer
+                Show {isDefinitionMode ? "Definition" : "Answer"}
               </Button>
             </div>
           ) : (
-            <div className="text-center">
-              <p className="text-xl font-medium mb-4">{currentCard.targetWord}</p>
-              {currentCard.targetExample && (
-                <p className="text-sm text-slate-600 italic">{currentCard.targetExample}</p>
+            <div className="text-center overflow-y-auto max-h-full">
+              {isDefinitionMode ? (
+                <>
+                  <p className="text-lg font-medium mb-4">{currentCard.targetWord}</p>
+                  {currentCard.targetExample && (
+                    <p className="text-sm text-slate-600 italic mt-2">{currentCard.targetExample}</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="text-xl font-medium mb-4">{currentCard.targetWord}</p>
+                  {currentCard.targetExample && (
+                    <p className="text-sm text-slate-600 italic">{currentCard.targetExample}</p>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -118,28 +134,28 @@ export default function SpacedRepetitionReview({
         <div className="grid grid-cols-4 gap-2">
           <Button
             variant="outline"
-            className="border-red-200 bg-red-50 hover:bg-red-100 text-red-700"
+            className="border-red-200 bg-red-50 hover:bg-red-100 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:hover:bg-red-900/50 dark:text-red-400"
             onClick={() => handleRating("again")}
           >
             Again
           </Button>
           <Button
             variant="outline"
-            className="border-orange-200 bg-orange-50 hover:bg-orange-100 text-orange-700"
+            className="border-orange-200 bg-orange-50 hover:bg-orange-100 text-orange-700 dark:border-orange-900 dark:bg-orange-950/30 dark:hover:bg-orange-900/50 dark:text-orange-400"
             onClick={() => handleRating("hard")}
           >
             Hard
           </Button>
           <Button
             variant="outline"
-            className="border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700"
+            className="border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/50 dark:text-emerald-400"
             onClick={() => handleRating("good")}
           >
             Good
           </Button>
           <Button
             variant="outline"
-            className="border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700"
+            className="border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:hover:bg-blue-900/50 dark:text-blue-400"
             onClick={() => handleRating("easy")}
           >
             Easy
@@ -158,6 +174,7 @@ export default function SpacedRepetitionReview({
           // Refresh the current card data
           onComplete()
         }}
+        isDefinitionMode={isDefinitionMode}
       />
     </div>
   )
