@@ -75,7 +75,7 @@ export default function Home() {
   }
 
   return (
-    <div className="w-full max-w-md mx-auto">
+    <div className="w-full max-w-[95%] sm:max-w-md mx-auto">
       <div className="space-y-6">
         {errorParam === "noApiKey" && (
           <Alert variant="destructive" className="mb-4">

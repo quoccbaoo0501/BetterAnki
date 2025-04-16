@@ -11,10 +11,16 @@ const LANGUAGE_PAIRS_HISTORY_KEY = `${BASE_STORAGE_KEY}_languagePairsHistory`
 const REPETITION_CONFIG_KEY = `${BASE_STORAGE_KEY}_repetitionConfig`
 const DECKS_KEY = `${BASE_STORAGE_KEY}_decks`
 const API_KEY_STORAGE_KEY = `${BASE_STORAGE_KEY}_apiKey`
+const DELETED_CARDS_KEY = `${BASE_STORAGE_KEY}_deletedCards`
 
 // Get storage key for a specific language pair
 function getStorageKey(nativeLanguage: string, targetLanguage: string): string {
   return `${BASE_STORAGE_KEY}_${nativeLanguage}_${targetLanguage}`
+}
+
+// Get storage key for deleted cards for a specific language pair
+function getDeletedCardsStorageKey(nativeLanguage: string, targetLanguage: string): string {
+  return `${DELETED_CARDS_KEY}_${nativeLanguage}_${targetLanguage}`
 }
 
 // Get storage key for a specific deck
@@ -286,12 +292,21 @@ export function deleteFlashcards(flashcardIds: string[], nativeLanguage: string,
     // Get existing flashcards
     const existingFlashcards = getSavedFlashcards(nativeLanguage, targetLanguage)
 
+    // Find the cards to be deleted
+    const cardsToDelete = existingFlashcards.filter((card) => flashcardIds.includes(card.id))
+
     // Filter out the ones to delete
     const updatedFlashcards = existingFlashcards.filter((card) => !flashcardIds.includes(card.id))
 
     // Save the updated list
     const storageKey = getStorageKey(nativeLanguage, targetLanguage)
     localStorage.setItem(storageKey, JSON.stringify(updatedFlashcards))
+
+    // Add reviewed cards to the deleted cards list
+    const reviewedCardsToDelete = cardsToDelete.filter((card) => card.lastReviewed !== undefined)
+    if (reviewedCardsToDelete.length > 0) {
+      addToDeletedCards(reviewedCardsToDelete, nativeLanguage, targetLanguage)
+    }
   } catch (error) {
     console.error("Error deleting flashcards:", error)
   }
@@ -313,7 +328,8 @@ export function getAvailableLanguagePairs(): { native: string; target: string }[
         key.startsWith(prefix) &&
         !key.includes("History") &&
         !key.includes("deck_") &&
-        !key.includes("_decks_")
+        !key.includes("_decks_") &&
+        !key.includes("_deletedCards_")
       ) {
         // Extract language pair from key
         const languages = key.substring(prefix.length).split("_")
@@ -611,5 +627,106 @@ export function clearApiKey(): void {
     localStorage.removeItem(API_KEY_STORAGE_KEY)
   } catch (error) {
     console.error("Error clearing API key:", error)
+  }
+}
+
+// NEW FUNCTIONS FOR DELETED CARDS
+
+// Add cards to the deleted cards list (only if they've been reviewed)
+export function addToDeletedCards(cards: Flashcard[], nativeLanguage: string, targetLanguage: string): void {
+  if (typeof window === "undefined") return
+
+  try {
+    // Only add cards that have been reviewed at least once
+    const reviewedCards = cards.filter((card) => card.lastReviewed !== undefined)
+    if (reviewedCards.length === 0) return
+
+    // Get existing deleted cards
+    const existingDeletedCards = getDeletedCards(nativeLanguage, targetLanguage)
+
+    // Extract just the essential information we need to avoid
+    const simplifiedCards = reviewedCards.map((card) => ({
+      nativeWord: card.nativeWord,
+      targetWord: card.targetWord,
+      deletedAt: Date.now(),
+      wasReviewed: true,
+    }))
+
+    // Combine with existing deleted cards, avoiding duplicates
+    const updatedDeletedCards = [...existingDeletedCards]
+
+    for (const card of simplifiedCards) {
+      // Check if this card is already in the deleted list
+      const isDuplicate = existingDeletedCards.some(
+        (existingCard) => existingCard.nativeWord === card.nativeWord && existingCard.targetWord === card.targetWord,
+      )
+
+      if (!isDuplicate) {
+        updatedDeletedCards.push(card)
+      }
+    }
+
+    // Save to localStorage
+    const storageKey = getDeletedCardsStorageKey(nativeLanguage, targetLanguage)
+    localStorage.setItem(storageKey, JSON.stringify(updatedDeletedCards))
+  } catch (error) {
+    console.error("Error adding to deleted cards:", error)
+  }
+}
+
+// Get deleted cards for a language pair
+export function getDeletedCards(
+  nativeLanguage: string,
+  targetLanguage: string,
+): Array<{
+  nativeWord: string
+  targetWord: string
+  deletedAt: number
+  wasReviewed: boolean
+}> {
+  if (typeof window === "undefined") return []
+
+  try {
+    const storageKey = getDeletedCardsStorageKey(nativeLanguage, targetLanguage)
+    const savedData = localStorage.getItem(storageKey)
+    if (!savedData) return []
+
+    return JSON.parse(savedData)
+  } catch (error) {
+    console.error("Error retrieving deleted cards:", error)
+    return []
+  }
+}
+
+// Clear deleted cards for a language pair
+export function clearDeletedCards(nativeLanguage: string, targetLanguage: string): void {
+  if (typeof window === "undefined") return
+
+  try {
+    const storageKey = getDeletedCardsStorageKey(nativeLanguage, targetLanguage)
+    localStorage.removeItem(storageKey)
+  } catch (error) {
+    console.error("Error clearing deleted cards:", error)
+  }
+}
+
+// Get all words to avoid (both current and deleted)
+export function getWordsToAvoid(nativeLanguage: string, targetLanguage: string): string[] {
+  if (typeof window === "undefined") return []
+
+  try {
+    // Get existing flashcards
+    const existingFlashcards = getSavedFlashcards(nativeLanguage, targetLanguage)
+    const existingWords = existingFlashcards.map((card) => card.targetWord)
+
+    // Get deleted cards
+    const deletedCards = getDeletedCards(nativeLanguage, targetLanguage)
+    const deletedWords = deletedCards.map((card) => card.targetWord)
+
+    // Combine and remove duplicates
+    return [...new Set([...existingWords, ...deletedWords])]
+  } catch (error) {
+    console.error("Error getting words to avoid:", error)
+    return []
   }
 }

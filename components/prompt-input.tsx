@@ -54,42 +54,34 @@ export default function PromptInput({ value, onChange, nativeLanguage, targetLan
         </TooltipProvider>
       </div>
 
-      <div className="relative">
+      <div className="space-y-2">
         <Textarea
           id="prompt"
           name="prompt"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Describe what flashcards you want to generate..."
-          className="min-h-[120px] pr-2"
+          className="min-h-[120px]"
         />
 
         {predictedPrompts.length > 0 && (
-          <div className="absolute bottom-2 right-2 flex flex-col space-y-1">
-            <TooltipProvider>
-              {predictedPrompts.map((prompt, index) => (
-                <Tooltip key={index}>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2 text-xs border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        onChange(prompt)
-                      }}
-                    >
-                      <Sparkles className="h-3 w-3 mr-1 text-amber-500" />
-                      {prompt.length > 15 ? prompt.substring(0, 15) + "..." : prompt}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="left" className="max-w-[200px]">
-                    <p>{prompt}</p>
-                  </TooltipContent>
-                </Tooltip>
-              ))}
-            </TooltipProvider>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {predictedPrompts.map((prompt, index) => (
+              <Button
+                key={index}
+                variant="outline"
+                size="sm"
+                className="h-auto py-1 px-2 text-xs border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 flex-shrink-0"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onChange(prompt)
+                }}
+              >
+                <Sparkles className="h-3 w-3 mr-1 text-amber-500" />
+                <span className="truncate">{prompt}</span>
+              </Button>
+            ))}
           </div>
         )}
       </div>

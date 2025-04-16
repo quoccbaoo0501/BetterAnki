@@ -1,5 +1,5 @@
 import type { Flashcard } from "@/types/flashcard"
-import { getSavedFlashcards, getSavedApiKey } from "./storage"
+import { getSavedFlashcards, getSavedApiKey, getWordsToAvoid } from "./storage"
 import { v4 as uuidv4 } from "uuid"
 
 export async function generateFlashcards(
@@ -17,11 +17,11 @@ export async function generateFlashcards(
       throw new Error("API key is required for Gemini")
     }
 
-    // Get existing flashcards to avoid duplicates
-    const existingFlashcards = getSavedFlashcards(nativeLanguage, targetLanguage)
-    const existingWords = existingFlashcards.map((card) => card.targetWord)
+    // Get words to avoid (both existing and deleted reviewed cards)
+    const wordsToAvoid = getWordsToAvoid(nativeLanguage, targetLanguage)
 
     // Get the count of existing flashcards to help with ID generation
+    const existingFlashcards = getSavedFlashcards(nativeLanguage, targetLanguage)
     const existingCardCount = existingFlashcards.length
 
     // Gemini API endpoint
@@ -46,9 +46,9 @@ export async function generateFlashcards(
       Generate flashcards from ${nativeLanguage} to ${targetLanguage} based on the user's prompt.`
     }
 
-    // Add existing words to avoid if there are any
-    if (existingWords.length > 0) {
-      systemPrompt += `\nIMPORTANT: DO NOT include these words that the user already knows: ${existingWords.join(", ")}`
+    // Add words to avoid if there are any
+    if (wordsToAvoid.length > 0) {
+      systemPrompt += `\nIMPORTANT: DO NOT include these words that the user already knows or has deleted after reviewing: ${wordsToAvoid.join(", ")}`
     }
 
     // Add information about existing card count to avoid ID conflicts

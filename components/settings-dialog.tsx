@@ -7,9 +7,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Settings, ExternalLink, Clipboard, Save, Trash2 } from "lucide-react"
-import { getSavedApiKey, saveApiKey, clearApiKey } from "@/lib/storage"
+import { Settings, ExternalLink, Clipboard, Save, Trash2, RefreshCw } from "lucide-react"
+import {
+  getSavedApiKey,
+  saveApiKey,
+  clearApiKey,
+  getDeletedCards,
+  clearDeletedCards,
+  getAvailableLanguagePairs,
+} from "@/lib/storage"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
 
 interface SettingsDialogProps {
   trigger?: React.ReactNode
@@ -21,6 +30,8 @@ export default function SettingsDialog({ trigger, onApiKeySaved }: SettingsDialo
   const [apiKey, setApiKey] = useState("")
   const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [deletedCardsCount, setDeletedCardsCount] = useState<Record<string, number>>({})
+  const [availablePairs, setAvailablePairs] = useState<{ native: string; target: string }[]>([])
 
   useEffect(() => {
     if (open && typeof window !== "undefined") {
@@ -29,6 +40,19 @@ export default function SettingsDialog({ trigger, onApiKeySaved }: SettingsDialo
       if (savedApiKey) {
         setApiKey(savedApiKey)
       }
+
+      // Load available language pairs
+      const pairs = getAvailableLanguagePairs()
+      setAvailablePairs(pairs)
+
+      // Load deleted cards count for each pair
+      const counts: Record<string, number> = {}
+      pairs.forEach((pair) => {
+        const deletedCards = getDeletedCards(pair.native, pair.target)
+        const key = `${pair.native}-${pair.target}`
+        counts[key] = deletedCards.length
+      })
+      setDeletedCardsCount(counts)
     }
   }, [open])
 
@@ -82,6 +106,26 @@ export default function SettingsDialog({ trigger, onApiKeySaved }: SettingsDialo
     }, 3000)
   }
 
+  const handleClearDeletedCards = (nativeLanguage: string, targetLanguage: string) => {
+    clearDeletedCards(nativeLanguage, targetLanguage)
+
+    // Update the count
+    setDeletedCardsCount((prev) => {
+      const key = `${nativeLanguage}-${targetLanguage}`
+      return { ...prev, [key]: 0 }
+    })
+
+    setSaveMessage({
+      type: "success",
+      text: `Cleared deleted cards for ${nativeLanguage} → ${targetLanguage}`,
+    })
+
+    // Clear the message after 3 seconds
+    setTimeout(() => {
+      setSaveMessage(null)
+    }, 3000)
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -96,10 +140,14 @@ export default function SettingsDialog({ trigger, onApiKeySaved }: SettingsDialo
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
         </DialogHeader>
-        <div className="space-y-6 py-4">
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium">API Key</h3>
 
+        <Tabs defaultValue="api-key" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="api-key">API Key</TabsTrigger>
+            <TabsTrigger value="deleted-cards">Deleted Cards</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="api-key" className="space-y-6 py-4">
             {saveMessage && (
               <Alert variant={saveMessage.type === "success" ? "default" : "destructive"} className="mb-4">
                 <AlertDescription>{saveMessage.text}</AlertDescription>
@@ -171,8 +219,62 @@ export default function SettingsDialog({ trigger, onApiKeySaved }: SettingsDialo
                 )}
               </div>
             </div>
-          </div>
-        </div>
+          </TabsContent>
+
+          <TabsContent value="deleted-cards" className="space-y-6 py-4">
+            {saveMessage && (
+              <Alert variant={saveMessage.type === "success" ? "default" : "destructive"} className="mb-4">
+                <AlertDescription>{saveMessage.text}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-slate-700">Reviewed & Deleted Cards</h3>
+              <p className="text-xs text-slate-500">
+                These are cards you've reviewed at least once and then deleted. The AI will avoid generating these words
+                again.
+              </p>
+
+              {availablePairs.length === 0 ? (
+                <p className="text-sm text-slate-600">No language pairs available.</p>
+              ) : (
+                <div className="space-y-3">
+                  {availablePairs.map((pair, index) => {
+                    const key = `${pair.native}-${pair.target}`
+                    const count = deletedCardsCount[key] || 0
+
+                    return (
+                      <div key={index} className="flex justify-between items-center p-2 border rounded-md">
+                        <div className="flex items-center">
+                          <span className="text-sm">
+                            {pair.native} → {pair.target}
+                          </span>
+                          <Badge variant="outline" className="ml-2">
+                            {count} {count === 1 ? "card" : "cards"}
+                          </Badge>
+                        </div>
+
+                        {count > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleClearDeletedCards(pair.native, pair.target)}
+                            className="h-8 w-8 p-0 text-red-500"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            <span className="sr-only">Reset</span>
+                          </Button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              <p className="text-xs text-slate-500 mt-2">Resetting will allow the AI to generate these words again.</p>
+            </div>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   )
