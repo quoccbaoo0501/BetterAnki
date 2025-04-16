@@ -14,7 +14,7 @@ export default function Navigation() {
       <div className="container mx-auto px-2 sm:px-4 py-3">
         <div className="flex items-center justify-between">
           <Link href="/" className="text-lg sm:text-xl font-bold text-foreground truncate mr-2">
-            LanguageLang
+            Better Anki
           </Link>
 
           <div className="flex items-center">

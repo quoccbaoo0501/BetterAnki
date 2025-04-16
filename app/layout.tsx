@@ -8,8 +8,8 @@ import { ThemeProvider } from "@/components/theme-provider"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "LanguageLang - AI Flashcard Generator",
-  description: "Learn languages with AI-generated flashcards",
+  title: "Better Anki - AI Flashcard Generator",
+  description: "Learn languages with AI-generated flashcards using spaced repetition. Like Anki, but better!",
 }
 
 export default function RootLayout({
