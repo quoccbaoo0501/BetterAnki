@@ -3,68 +3,97 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import type { Flashcard } from "@/types/flashcard"
+import type { Deck } from "@/types/deck"
 import FlashcardItem from "@/components/flashcard-item"
 import { Button } from "@/components/ui/button"
 import { generateFlashcards } from "@/lib/ai"
-import { saveFlashcard } from "@/lib/storage"
-import { getApiKey } from "@/components/llm-api-settings"
+import { saveFlashcards, savePromptToHistory, getPromptHistory, getDecks } from "@/lib/storage"
+import { generatePredictedPrompts, savePredictedPrompts } from "@/lib/prompt-predictor"
+import EditFlashcardDialog from "@/components/edit-flashcard-dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
+import CreateDeckDialog from "./create-deck-dialog"
+import { PlusCircle } from "lucide-react"
 
-// Define props type directly
-interface FlashcardGeneratorProps {
+export default function FlashcardGenerator({
+  nativeLanguage,
+  targetLanguage,
+  prompt,
+  apiKey,
+}: {
   nativeLanguage: string
   targetLanguage: string
   prompt: string
-}
-
-export default function FlashcardGenerator({ nativeLanguage, targetLanguage, prompt }: FlashcardGeneratorProps) {
+  apiKey?: string
+}) {
   const router = useRouter()
   const [flashcards, setFlashcards] = useState<Flashcard[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [currentEditCard, setCurrentEditCard] = useState<Flashcard | null>(null)
+  const [decks, setDecks] = useState<Deck[]>([])
+  const [selectedDeckId, setSelectedDeckId] = useState<string>("")
 
   useEffect(() => {
-    async function fetchFlashcards() {
-      setIsLoading(true)
-      setError(null)
-
-      if (!prompt || prompt.trim() === '') {
-        console.error("Prompt is missing or empty in search parameters.")
-        setError("No prompt provided. Please go back and enter a topic or text.")
-        setIsLoading(false)
-        setFlashcards([])
-        return
-      }
- 
+    async function fetchData() {
       try {
-        const apiKey = getApiKey()
-        const generatedCards = await generateFlashcards(
-          nativeLanguage,
-          targetLanguage,
-          prompt,
-          apiKey,
-        )
-        // Add language properties to the generated cards
-        const cardsWithLanguage = generatedCards.map(card => ({
-            ...card,
-            nativeLanguage: nativeLanguage,
-            targetLanguage: targetLanguage
-        }))
+        setIsLoading(true)
 
-        setFlashcards(cardsWithLanguage)
-        // By default, select all flashcards
-        setSelectedIds(new Set(cardsWithLanguage.map((card) => card.id)))
+        if (typeof window !== "undefined") {
+          // Load available decks
+          const availableDecks = getDecks(nativeLanguage, targetLanguage)
+          setDecks(availableDecks)
+
+          // Only set a selected deck if decks exist
+          if (availableDecks.length > 0) {
+            setSelectedDeckId(availableDecks[0].id)
+          } else {
+            setSelectedDeckId("")
+          }
+
+          // Save the prompt to history first
+          savePromptToHistory(prompt, nativeLanguage, targetLanguage)
+
+          // Start both requests in parallel
+          const [flashcardsPromise, predictionsPromise] = await Promise.allSettled([
+            // Request 1: Generate flashcards
+            generateFlashcards(nativeLanguage, targetLanguage, prompt, apiKey),
+
+            // Request 2: Predict next prompts
+            (async () => {
+              const history = getPromptHistory()
+              const predictions = await generatePredictedPrompts(history, nativeLanguage, targetLanguage, apiKey)
+              // Save predictions to cache for use in the UI
+              savePredictedPrompts(predictions)
+              return predictions
+            })(),
+          ])
+
+          // Handle flashcards result
+          if (flashcardsPromise.status === "fulfilled") {
+            const cards = flashcardsPromise.value
+            setFlashcards(cards)
+            // By default, select all flashcards
+            setSelectedIds(new Set(cards.map((card) => card.id)))
+          } else {
+            console.error("Failed to generate flashcards:", flashcardsPromise.reason)
+          }
+
+          // Handle predictions result (logging only, UI updates via cache)
+          if (predictionsPromise.status === "rejected") {
+            console.error("Failed to generate prompt predictions:", predictionsPromise.reason)
+          }
+        }
       } catch (error) {
-        console.error("Failed to generate flashcards:", error)
-        setFlashcards([])
-        setError("Failed to generate flashcards. Please check your API key or try again.")
+        console.error("Error in fetchData:", error)
       } finally {
         setIsLoading(false)
       }
     }
 
-    fetchFlashcards()
-  }, [nativeLanguage, targetLanguage, prompt])
+    fetchData()
+  }, [nativeLanguage, targetLanguage, prompt, apiKey])
 
   const toggleFlashcard = (id: string) => {
     setSelectedIds((prev) => {
@@ -89,31 +118,42 @@ export default function FlashcardGenerator({ nativeLanguage, targetLanguage, pro
   const saveSelectedFlashcards = () => {
     const selectedFlashcards = flashcards.filter((card) => selectedIds.has(card.id))
 
-    // Save each selected flashcard individually using the new function
-    selectedFlashcards.forEach((card) => {
-        // Ensure the card has the language properties before saving
-        // (Should be guaranteed by the useEffect logic now)
-        if (card.nativeLanguage && card.targetLanguage) {
-            saveFlashcard(card)
-        } else {
-            console.warn("Attempted to save a card without language properties:", card);
-        }
-    })
+    // Save to storage with language pair and deck ID
+    saveFlashcards(selectedFlashcards, nativeLanguage, targetLanguage, selectedDeckId)
 
-    // Navigate to learn page
-    router.push("/learn")
+    // Navigate to learn page with language parameters
+    router.push(
+      `/learn?native=${encodeURIComponent(nativeLanguage)}&target=${encodeURIComponent(targetLanguage)}&deck=${encodeURIComponent(selectedDeckId)}`,
+    )
+  }
+
+  const handleEditCard = (card: Flashcard) => {
+    setCurrentEditCard(card)
+    setEditDialogOpen(true)
+  }
+
+  const handleCardUpdated = () => {
+    // Update the flashcard in the local state
+    if (currentEditCard) {
+      setFlashcards((prev) =>
+        prev.map((card) => (card.id === currentEditCard.id ? { ...currentEditCard, ...card } : card)),
+      )
+    }
+  }
+
+  const handleDeckCreated = () => {
+    // Refresh decks list
+    const updatedDecks = getDecks(nativeLanguage, targetLanguage)
+    setDecks(updatedDecks)
+
+    // Select the newly created deck (last in the list)
+    if (updatedDecks.length > 0) {
+      setSelectedDeckId(updatedDecks[updatedDecks.length - 1].id)
+    }
   }
 
   if (isLoading) {
     return <p className="text-slate-600">Generating flashcards with AI...</p>
-  }
-
-  if (error) {
-    return <p className="text-red-600">Error: {error}</p>
-  }
-
-  if (!flashcards.length) {
-    return <p className="text-slate-600">No flashcards were generated. Try modifying your prompt.</p>
   }
 
   return (
@@ -125,11 +165,66 @@ export default function FlashcardGenerator({ nativeLanguage, targetLanguage, pro
         <Button variant="outline" size="sm" onClick={deselectAll}>
           Deselect All
         </Button>
-        <div className="ml-auto">
-          <Button variant="default" onClick={saveSelectedFlashcards} disabled={selectedIds.size === 0}>
-            Save {selectedIds.size} Flashcards
-          </Button>
-        </div>
+      </div>
+
+      <div className="p-4 border rounded-lg bg-slate-50">
+        {decks.length === 0 ? (
+          <div className="text-center py-2">
+            <p className="text-slate-600 mb-4">You need to create a deck before saving flashcards.</p>
+            <CreateDeckDialog
+              nativeLanguage={nativeLanguage}
+              targetLanguage={targetLanguage}
+              onDeckCreated={handleDeckCreated}
+              trigger={
+                <Button>
+                  <PlusCircle className="h-4 w-4 mr-2" />
+                  Create First Deck
+                </Button>
+              }
+            />
+          </div>
+        ) : (
+          <>
+            <div className="flex justify-between items-end mb-4">
+              <div className="space-y-2 flex-grow mr-4">
+                <Label htmlFor="save-to-deck">Save to Deck</Label>
+                <Select value={selectedDeckId} onValueChange={setSelectedDeckId}>
+                  <SelectTrigger id="save-to-deck">
+                    <SelectValue placeholder="Select a deck" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {decks.map((deck) => (
+                      <SelectItem key={deck.id} value={deck.id}>
+                        {deck.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <CreateDeckDialog
+                nativeLanguage={nativeLanguage}
+                targetLanguage={targetLanguage}
+                onDeckCreated={handleDeckCreated}
+                trigger={
+                  <Button variant="ghost" size="sm" className="mb-1">
+                    <PlusCircle className="h-4 w-4 mr-1" />
+                    New Deck
+                  </Button>
+                }
+              />
+            </div>
+
+            <Button
+              variant="default"
+              className="w-full"
+              onClick={saveSelectedFlashcards}
+              disabled={selectedIds.size === 0 || !selectedDeckId}
+            >
+              Save {selectedIds.size} Flashcards to Selected Deck
+            </Button>
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -140,9 +235,21 @@ export default function FlashcardGenerator({ nativeLanguage, targetLanguage, pro
             isSelected={selectedIds.has(card.id)}
             onToggle={() => toggleFlashcard(card.id)}
             showCheckbox={true}
+            targetLanguage={targetLanguage}
+            onEdit={handleEditCard}
           />
         ))}
       </div>
+
+      {/* Edit Dialog */}
+      <EditFlashcardDialog
+        flashcard={currentEditCard}
+        nativeLanguage={nativeLanguage}
+        targetLanguage={targetLanguage}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        onFlashcardUpdated={handleCardUpdated}
+      />
     </div>
   )
 }

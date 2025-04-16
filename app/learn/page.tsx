@@ -1,83 +1,126 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import FlashcardItem from "@/components/flashcard-item"
 import { Button } from "@/components/ui/button"
+import { Trash2, BookX, ChevronLeft, ChevronRight, Clock, Settings2, PlusCircle } from "lucide-react"
 import type { Flashcard } from "@/types/flashcard"
+import type { Deck } from "@/types/deck"
 import {
-  getFlashcardsForLanguagePair,
-  deleteFlashcards as deleteFlashcardsFromStorage,
-  getTargetLanguages,
-  getNativeLanguagesForTarget,
+  getSavedFlashcards,
+  getAvailableLanguagePairs,
+  deleteFlashcards,
+  getDueFlashcards,
+  getDecks,
+  getFlashcardCountByDeck,
 } from "@/lib/storage"
-import { BookX, Trash2 } from "lucide-react"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import LanguagePairSelector from "@/components/language-pair-selector"
+import AddFlashcardDialog from "@/components/add-flashcard-dialog"
+import SpacedRepetitionSettings from "@/components/spaced-repetition-settings"
+import SpacedRepetitionReview from "@/components/spaced-repetition-review"
+import EditFlashcardDialog from "@/components/edit-flashcard-dialog"
+import DeckSelector from "@/components/deck-selector"
+import MoveToDialog from "@/components/move-to-deck-dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import DeckManagement from "@/components/deck-management"
+import CreateDeckDialog from "@/components/create-deck-dialog"
 
 export default function LearnPage() {
-  const [targetLanguages, setTargetLanguages] = useState<string[]>([])
-  const [selectedTargetLanguage, setSelectedTargetLanguage] = useState<string | null>(null)
-  const [nativeLanguages, setNativeLanguages] = useState<string[]>([])
-  const [selectedNativeLanguage, setSelectedNativeLanguage] = useState<string | null>(null)
+  const searchParams = useSearchParams()
+  const initialNative = searchParams.get("native") || ""
+  const initialTarget = searchParams.get("target") || ""
+  const initialDeckId = searchParams.get("deck") || ""
 
+  const [nativeLanguage, setNativeLanguage] = useState(initialNative)
+  const [targetLanguage, setTargetLanguage] = useState(initialTarget)
   const [flashcards, setFlashcards] = useState<Flashcard[]>([])
+  const [dueFlashcards, setDueFlashcards] = useState<Flashcard[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [isLoadingLanguages, setIsLoadingLanguages] = useState(true)
-  const [isLoadingFlashcards, setIsLoadingFlashcards] = useState(false)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isLoading, setIsLoading] = useState(true)
+  const [isDeleteMode, setIsDeleteMode] = useState(false)
+  const [selectedForDeletion, setSelectedForDeletion] = useState<Set<string>>(new Set())
+  const [availablePairs, setAvailablePairs] = useState<{ native: string; target: string }[]>([])
+  const [isReviewMode, setIsReviewMode] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [currentEditCard, setCurrentEditCard] = useState<Flashcard | null>(null)
+  const [decks, setDecks] = useState<Deck[]>([])
+  const [selectedDeckId, setSelectedDeckId] = useState(initialDeckId)
+  const [deckManagementOpen, setDeckManagementOpen] = useState(false)
+  const [cardCounts, setCardCounts] = useState<Record<string, number>>({})
 
+  // Load available language pairs
   useEffect(() => {
-    setIsLoadingLanguages(true)
-    const targets = getTargetLanguages()
-    setTargetLanguages(targets)
-    if (targets.length > 0) {
-        // setSelectedTargetLanguage(targets[0]); // Let user select explicitly
-    }
-    setIsLoadingLanguages(false)
-  }, [])
+    if (typeof window !== "undefined") {
+      const pairs = getAvailableLanguagePairs()
+      setAvailablePairs(pairs)
 
-  useEffect(() => {
-    if (selectedTargetLanguage) {
-      const natives = getNativeLanguagesForTarget(selectedTargetLanguage)
-      setNativeLanguages(natives)
-      // Reset native selection when target changes
-      setSelectedNativeLanguage(null)
-      setFlashcards([]) // Clear flashcards when target changes
-      setCurrentIndex(0)
-      setSelectedIds(new Set())
-      if (natives.length > 0) {
-        // setSelectedNativeLanguage(natives[0]); // Let user select explicitly
+      // If no language pair is selected but pairs exist, select the first one
+      if ((!nativeLanguage || !targetLanguage) && pairs.length > 0) {
+        setNativeLanguage(pairs[0].native)
+        setTargetLanguage(pairs[0].target)
       }
-    } else {
-      setNativeLanguages([])
-      setSelectedNativeLanguage(null)
-      setFlashcards([])
-      setCurrentIndex(0)
-      setSelectedIds(new Set())
     }
-  }, [selectedTargetLanguage])
+  }, [nativeLanguage, targetLanguage])
 
+  // Load decks and flashcards when language pair changes
   useEffect(() => {
-    if (selectedTargetLanguage && selectedNativeLanguage) {
-      setIsLoadingFlashcards(true)
-      const cards = getFlashcardsForLanguagePair(selectedTargetLanguage, selectedNativeLanguage)
-      setFlashcards(cards)
-      setIsLoadingFlashcards(false)
-      // Reset state related to the card list
-      setCurrentIndex(0)
-      setSelectedIds(new Set())
-    } else {
-        setFlashcards([]) // Clear if no language pair is selected
+    if (typeof window !== "undefined" && nativeLanguage && targetLanguage) {
+      // Get all decks
+      const availableDecks = getDecks(nativeLanguage, targetLanguage)
+      setDecks(availableDecks)
+
+      // If decks exist and no deck is selected or the selected deck doesn't exist, select the first one
+      if (availableDecks.length > 0) {
+        if (!selectedDeckId || !availableDecks.some((deck) => deck.id === selectedDeckId)) {
+          setSelectedDeckId(availableDecks[0].id)
+        }
+      } else {
+        // No decks exist
+        setSelectedDeckId("")
+      }
+
+      // Get card counts for each deck
+      const counts = getFlashcardCountByDeck(nativeLanguage, targetLanguage)
+      setCardCounts(counts)
     }
-  }, [selectedTargetLanguage, selectedNativeLanguage])
+    setIsLoading(false)
+  }, [nativeLanguage, targetLanguage])
+
+  // Load flashcards when deck changes
+  useEffect(() => {
+    if (typeof window !== "undefined" && nativeLanguage && targetLanguage && selectedDeckId) {
+      // Get flashcards for the selected deck
+      const savedCards = getSavedFlashcards(nativeLanguage, targetLanguage, selectedDeckId)
+      setFlashcards(savedCards)
+
+      // Get cards due for review in this deck
+      const due = getDueFlashcards(nativeLanguage, targetLanguage, selectedDeckId)
+      setDueFlashcards(due)
+
+      setCurrentIndex(0)
+      setSelectedForDeletion(new Set())
+      setIsDeleteMode(false)
+      setIsReviewMode(false)
+    }
+  }, [nativeLanguage, targetLanguage, selectedDeckId])
+
+  const refreshFlashcards = () => {
+    if (typeof window !== "undefined" && nativeLanguage && targetLanguage && selectedDeckId) {
+      // Get flashcards for the selected deck
+      const savedCards = getSavedFlashcards(nativeLanguage, targetLanguage, selectedDeckId)
+      setFlashcards(savedCards)
+
+      // Get cards due for review in this deck
+      const due = getDueFlashcards(nativeLanguage, targetLanguage, selectedDeckId)
+      setDueFlashcards(due)
+
+      // Update card counts
+      const counts = getFlashcardCountByDeck(nativeLanguage, targetLanguage)
+      setCardCounts(counts)
+    }
+  }
 
   const nextCard = () => {
     if (currentIndex < flashcards.length - 1) {
@@ -91,8 +134,13 @@ export default function LearnPage() {
     }
   }
 
-  const toggleFlashcard = (id: string) => {
-    setSelectedIds((prev) => {
+  const toggleDeleteMode = () => {
+    setIsDeleteMode(!isDeleteMode)
+    setSelectedForDeletion(new Set())
+  }
+
+  const toggleCardForDeletion = (id: string) => {
+    setSelectedForDeletion((prev) => {
       const newSet = new Set(prev)
       if (newSet.has(id)) {
         newSet.delete(id)
@@ -103,189 +151,420 @@ export default function LearnPage() {
     })
   }
 
-  const selectAll = () => {
-    setSelectedIds(new Set(flashcards.map((card) => card.id)))
+  const selectAllForDeletion = () => {
+    setSelectedForDeletion(new Set(flashcards.map((card) => card.id)))
   }
 
-  const deselectAll = () => {
-    setSelectedIds(new Set())
+  const deselectAllForDeletion = () => {
+    setSelectedForDeletion(new Set())
   }
 
-  const deleteSelectedFlashcards = () => {
-    if (!selectedTargetLanguage || !selectedNativeLanguage) return // Should not happen if button is disabled
+  const deleteSelectedCards = () => {
+    if (selectedForDeletion.size === 0) return
 
-    const idsToDelete = Array.from(selectedIds)
-    // Remove from local state
-    setFlashcards((prev) => prev.filter((card) => !selectedIds.has(card.id)))
+    const idsToDelete = Array.from(selectedForDeletion)
+    deleteFlashcards(idsToDelete, nativeLanguage, targetLanguage)
 
-    // Remove from storage using the new function signature
-    deleteFlashcardsFromStorage(selectedTargetLanguage, selectedNativeLanguage, idsToDelete)
+    // Update the flashcards list
+    const updatedFlashcards = flashcards.filter((card) => !selectedForDeletion.has(card.id))
+    setFlashcards(updatedFlashcards)
+    setSelectedForDeletion(new Set())
+    setCurrentIndex(0)
 
-    // Reset selection
-    setSelectedIds(new Set())
-    // Adjust current index if needed for study mode
-    if (currentIndex >= flashcards.length - idsToDelete.length) {
-      setCurrentIndex(Math.max(0, flashcards.length - idsToDelete.length - 1))
+    // If all cards were deleted, exit delete mode
+    if (updatedFlashcards.length === 0) {
+      setIsDeleteMode(false)
+    }
+
+    // Refresh due cards and card counts
+    const due = getDueFlashcards(nativeLanguage, targetLanguage, selectedDeckId)
+    setDueFlashcards(due)
+
+    const counts = getFlashcardCountByDeck(nativeLanguage, targetLanguage)
+    setCardCounts(counts)
+  }
+
+  const handleLanguagePairChange = (native: string, target: string) => {
+    setNativeLanguage(native)
+    setTargetLanguage(target)
+  }
+
+  const handleDeckChange = (deckId: string) => {
+    setSelectedDeckId(deckId)
+  }
+
+  const startReview = () => {
+    setIsReviewMode(true)
+  }
+
+  const endReview = () => {
+    setIsReviewMode(false)
+    refreshFlashcards()
+  }
+
+  const handleEditCard = (card: Flashcard) => {
+    setCurrentEditCard(card)
+    setEditDialogOpen(true)
+  }
+
+  const handleDeckUpdated = () => {
+    // Refresh decks list
+    const updatedDecks = getDecks(nativeLanguage, targetLanguage)
+    setDecks(updatedDecks)
+
+    // Update card counts
+    const counts = getFlashcardCountByDeck(nativeLanguage, targetLanguage)
+    setCardCounts(counts)
+
+    // If the current deck was deleted, select the first available deck
+    if (updatedDecks.length > 0 && !updatedDecks.some((deck) => deck.id === selectedDeckId)) {
+      setSelectedDeckId(updatedDecks[0].id)
     }
   }
 
-  const isAllSelected = flashcards.length > 0 && selectedIds.size === flashcards.length
+  const handleMoveComplete = () => {
+    // Refresh flashcards for the current deck
+    const savedCards = getSavedFlashcards(nativeLanguage, targetLanguage, selectedDeckId)
+    setFlashcards(savedCards)
 
-  return (
-    <div className="w-full max-w-lg mx-auto space-y-6 py-8">
-      <h1 className="text-3xl font-bold text-slate-800 text-center">Learn Your Flashcards</h1>
+    // Reset selection
+    setSelectedForDeletion(new Set())
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 border rounded-md bg-slate-50">
-        <div>
-          <Label htmlFor="target-language-select" className="text-sm font-medium text-slate-700">Target Language (Learn)</Label>
-          <Select
-            value={selectedTargetLanguage ?? undefined}
-            onValueChange={(value) => setSelectedTargetLanguage(value)}
-            disabled={isLoadingLanguages || targetLanguages.length === 0}
-          >
-            <SelectTrigger id="target-language-select" className="mt-1">
-              <SelectValue placeholder={isLoadingLanguages ? "Loading..." : "Select language..."} />
-            </SelectTrigger>
-            <SelectContent>
-              {targetLanguages.map((lang) => (
-                <SelectItem key={lang} value={lang}>{lang}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {targetLanguages.length === 0 && !isLoadingLanguages && (
-             <p className="text-xs text-slate-500 mt-1">No languages found. Create flashcards first.</p>
-          )}
+    // Update card counts
+    const counts = getFlashcardCountByDeck(nativeLanguage, targetLanguage)
+    setCardCounts(counts)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="w-full max-w-md mx-auto text-center py-12">
+        <p className="text-slate-600">Loading your flashcards...</p>
+      </div>
+    )
+  }
+
+  if (availablePairs.length === 0) {
+    return (
+      <div className="w-full max-w-md mx-auto text-center py-12">
+        <BookX className="h-12 w-12 mx-auto text-slate-400 mb-4" />
+        <h2 className="text-xl font-semibold text-slate-800 mb-2">No flashcards yet</h2>
+        <p className="text-slate-600 mb-6">
+          You haven't created any flashcards yet. Go to the Create tab to generate some!
+        </p>
+        <Button asChild>
+          <a href="/">Create Flashcards</a>
+        </Button>
+      </div>
+    )
+  }
+
+  if (decks.length === 0 && nativeLanguage && targetLanguage) {
+    return (
+      <div className="w-full max-w-md mx-auto">
+        <div className="mb-6">
+          <LanguagePairSelector
+            availablePairs={availablePairs}
+            selectedNative={nativeLanguage}
+            selectedTarget={targetLanguage}
+            onChange={handleLanguagePairChange}
+          />
         </div>
 
-        <div>
-          <Label htmlFor="native-language-select" className="text-sm font-medium text-slate-700">Native Language (Help)</Label>
-          <Select
-            value={selectedNativeLanguage ?? undefined}
-            onValueChange={(value) => setSelectedNativeLanguage(value)}
-            disabled={!selectedTargetLanguage || nativeLanguages.length === 0}
-          >
-            <SelectTrigger id="native-language-select" className="mt-1">
-              <SelectValue placeholder={!selectedTargetLanguage ? "Select target first" : "Select language..."} />
-            </SelectTrigger>
-            <SelectContent>
-              {nativeLanguages.map((lang) => (
-                <SelectItem key={lang} value={lang}>{lang}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-           {selectedTargetLanguage && nativeLanguages.length === 0 && (
-             <p className="text-xs text-slate-500 mt-1">No native languages found for {selectedTargetLanguage}.</p>
-          )}
+        <div className="text-center py-8">
+          <h2 className="text-xl font-semibold text-slate-800 mb-4">No Decks Available</h2>
+          <p className="text-slate-600 mb-6">You need to create a deck before you can add or view flashcards.</p>
+
+          <CreateDeckDialog
+            nativeLanguage={nativeLanguage}
+            targetLanguage={targetLanguage}
+            onDeckCreated={handleDeckUpdated}
+            trigger={
+              <Button>
+                <PlusCircle className="h-4 w-4 mr-2" />
+                Create First Deck
+              </Button>
+            }
+          />
         </div>
       </div>
+    )
+  }
 
-      {isLoadingFlashcards && (
-        <div className="text-center py-6">
-          <p className="text-slate-600">Loading flashcards...</p>
+  if (flashcards.length === 0 && nativeLanguage && targetLanguage) {
+    return (
+      <div className="w-full max-w-md mx-auto">
+        <div className="mb-6">
+          <LanguagePairSelector
+            availablePairs={availablePairs}
+            selectedNative={nativeLanguage}
+            selectedTarget={targetLanguage}
+            onChange={handleLanguagePairChange}
+          />
         </div>
-      )}
 
-      {selectedTargetLanguage && selectedNativeLanguage && !isLoadingFlashcards && (
-        <>
-          {flashcards.length === 0 ? (
-             <div className="w-full max-w-md mx-auto text-center py-12">
-              <BookX className="h-12 w-12 mx-auto text-slate-400 mb-4" />
-              <h2 className="text-xl font-semibold text-slate-800 mb-2">No Flashcards Found</h2>
-              <p className="text-slate-600 mb-6">
-                No flashcards were found for {selectedTargetLanguage} / {selectedNativeLanguage}.
-                Go to the Create tab to generate some!
-              </p>
-              <Button asChild>
-                <a href="/">Create Flashcards</a>
-              </Button>
+        <div className="mb-6">
+          <DeckSelector
+            nativeLanguage={nativeLanguage}
+            targetLanguage={targetLanguage}
+            selectedDeckId={selectedDeckId}
+            onChange={handleDeckChange}
+          />
+        </div>
+
+        <div className="text-center py-8">
+          <BookX className="h-12 w-12 mx-auto text-slate-400 mb-4" />
+          <h2 className="text-xl font-semibold text-slate-800 mb-2">No flashcards in this deck</h2>
+          <p className="text-slate-600 mb-6">You don't have any flashcards in this deck yet.</p>
+
+          <div className="flex flex-col space-y-4 items-center">
+            <Button asChild>
+              <a
+                href={`/?nativeLanguage=${encodeURIComponent(nativeLanguage)}&targetLanguage=${encodeURIComponent(targetLanguage)}`}
+              >
+                Create {nativeLanguage} to {targetLanguage} Flashcards
+              </a>
+            </Button>
+
+            <AddFlashcardDialog
+              nativeLanguage={nativeLanguage}
+              targetLanguage={targetLanguage}
+              onFlashcardAdded={refreshFlashcards}
+              defaultDeckId={selectedDeckId}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show review mode if active
+  if (isReviewMode) {
+    return (
+      <div className="w-full max-w-md mx-auto">
+        <div className="mb-6">
+          <Button variant="outline" size="sm" onClick={endReview}>
+            <ChevronLeft className="h-4 w-4 mr-2" />
+            Back to Learn
+          </Button>
+        </div>
+
+        <div className="space-y-6">
+          <h1 className="text-2xl font-bold text-slate-800">Spaced Repetition Review</h1>
+
+          <SpacedRepetitionReview
+            flashcards={dueFlashcards}
+            nativeLanguage={nativeLanguage}
+            targetLanguage={targetLanguage}
+            onComplete={endReview}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="w-full max-w-md mx-auto">
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-slate-800">Learn Flashcards</h1>
+
+          <div className="flex space-x-2">
+            <Dialog open={deckManagementOpen} onOpenChange={setDeckManagementOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Settings2 className="h-4 w-4 mr-2" />
+                  Manage Decks
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px]">
+                <DialogHeader>
+                  <DialogTitle>Deck Management</DialogTitle>
+                </DialogHeader>
+                <DeckManagement
+                  decks={decks}
+                  nativeLanguage={nativeLanguage}
+                  targetLanguage={targetLanguage}
+                  onDeckUpdated={handleDeckUpdated}
+                  cardCounts={cardCounts}
+                />
+              </DialogContent>
+            </Dialog>
+
+            <Button variant={isDeleteMode ? "destructive" : "outline"} size="sm" onClick={toggleDeleteMode}>
+              {isDeleteMode ? (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Cancel
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center">
+          <LanguagePairSelector
+            availablePairs={availablePairs}
+            selectedNative={nativeLanguage}
+            selectedTarget={targetLanguage}
+            onChange={handleLanguagePairChange}
+          />
+        </div>
+
+        <DeckSelector
+          nativeLanguage={nativeLanguage}
+          targetLanguage={targetLanguage}
+          selectedDeckId={selectedDeckId}
+          onChange={handleDeckChange}
+        />
+
+        <div className="flex justify-between items-center">
+          <AddFlashcardDialog
+            nativeLanguage={nativeLanguage}
+            targetLanguage={targetLanguage}
+            onFlashcardAdded={refreshFlashcards}
+            defaultDeckId={selectedDeckId}
+          />
+
+          {dueFlashcards.length > 0 && (
+            <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={startReview}>
+              <Clock className="h-4 w-4 mr-2" />
+              Review {dueFlashcards.length} Cards
+            </Button>
+          )}
+        </div>
+
+        {dueFlashcards.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <Clock className="h-4 w-4 text-amber-600 mr-2" />
+              <span className="text-amber-800 font-medium">{dueFlashcards.length} cards due for review</span>
             </div>
-          ) : (
-            <Tabs defaultValue="study" className="w-full">
-                <div className="flex justify-between items-center mb-4">
-                 <p className="text-slate-600 text-sm">
-                    {flashcards.length} card{flashcards.length === 1 ? '' : 's'} for {selectedTargetLanguage} / {selectedNativeLanguage}
-                 </p>
-                 <TabsList className="grid w-full grid-cols-2 max-w-xs">
-                    <TabsTrigger value="study">Study</TabsTrigger>
-                    <TabsTrigger value="browse">Browse</TabsTrigger>
-                 </TabsList>
-                </div>
+          </div>
+        )}
 
-              <TabsContent value="study" className="space-y-6">
-                 <p className="text-center text-slate-600">
-                    Card {currentIndex + 1} of {flashcards.length}
-                 </p>
-                <div className="flex justify-center">
-                  <FlashcardItem
-                    flashcard={flashcards[currentIndex]}
-                    isSelected={true}
-                    onToggle={() => {}}
-                    showCheckbox={false}
-                  />
-                </div>
-                <div className="flex justify-between">
-                  <Button variant="outline" onClick={prevCard} disabled={currentIndex === 0}>
-                    Previous
-                  </Button>
-                  <Button variant="default" onClick={nextCard} disabled={currentIndex === flashcards.length - 1}>
-                    Next
-                  </Button>
-                </div>
-              </TabsContent>
+        <div className="flex justify-between items-center">
+          <SpacedRepetitionSettings />
+        </div>
 
-              <TabsContent value="browse" className="space-y-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="select-all"
-                      checked={isAllSelected}
-                      onCheckedChange={(checked) => (checked ? selectAll() : deselectAll())}
-                      disabled={flashcards.length === 0}
-                    />
-                    <Label htmlFor="select-all" className="text-sm font-medium">
-                      Select All ({selectedIds.size} / {flashcards.length})
-                    </Label>
+        {isDeleteMode ? (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div className="space-x-2">
+                <Button variant="outline" size="sm" onClick={selectAllForDeletion}>
+                  Select All
+                </Button>
+                <Button variant="outline" size="sm" onClick={deselectAllForDeletion}>
+                  Deselect All
+                </Button>
+              </div>
+
+              <div className="flex space-x-2">
+                <MoveToDialog
+                  nativeLanguage={nativeLanguage}
+                  targetLanguage={targetLanguage}
+                  selectedCardIds={Array.from(selectedForDeletion)}
+                  currentDeckId={selectedDeckId}
+                  onMoveComplete={handleMoveComplete}
+                />
+
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={deleteSelectedCards}
+                  disabled={selectedForDeletion.size === 0}
+                >
+                  Delete {selectedForDeletion.size} Cards
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {flashcards.map((card) => (
+                <FlashcardItem
+                  key={card.id}
+                  flashcard={card}
+                  isSelected={selectedForDeletion.has(card.id)}
+                  onToggle={() => toggleCardForDeletion(card.id)}
+                  showCheckbox={true}
+                  targetLanguage={targetLanguage}
+                />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <Tabs defaultValue="study" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-6">
+              <TabsTrigger value="study">Study Mode</TabsTrigger>
+              <TabsTrigger value="browse">Browse All</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="study" className="space-y-6">
+              {flashcards.length > 0 && (
+                <>
+                  <div className="text-center mb-2">
+                    <p className="text-slate-600">
+                      {currentIndex + 1} of {flashcards.length} cards
+                    </p>
                   </div>
-                  <div className="ml-auto">
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={deleteSelectedFlashcards}
-                      disabled={flashcards.length === 0 || selectedIds.size === 0 || !selectedTargetLanguage || !selectedNativeLanguage}
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete Selected
+
+                  <div className="flex justify-center">
+                    <FlashcardItem
+                      flashcard={flashcards[currentIndex]}
+                      isSelected={true}
+                      onToggle={() => {}}
+                      showCheckbox={false}
+                      targetLanguage={targetLanguage}
+                      onEdit={handleEditCard}
+                    />
+                  </div>
+
+                  <div className="flex justify-between">
+                    <Button variant="outline" onClick={prevCard} disabled={currentIndex === 0}>
+                      <ChevronLeft className="h-4 w-4 mr-2" />
+                      Previous
+                    </Button>
+                    <Button variant="default" onClick={nextCard} disabled={currentIndex === flashcards.length - 1}>
+                      Next
+                      <ChevronRight className="h-4 w-4 ml-2" />
                     </Button>
                   </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {flashcards.map((card) => (
-                    <FlashcardItem
-                      key={card.id}
-                      flashcard={card}
-                      isSelected={selectedIds.has(card.id)}
-                      onToggle={() => toggleFlashcard(card.id)}
-                      showCheckbox={true}
-                    />
-                  ))}
-                </div>
-              </TabsContent>
-            </Tabs>
-          )}
-        </>
-      )}
+                </>
+              )}
+            </TabsContent>
 
-      {!isLoadingLanguages && !selectedTargetLanguage && targetLanguages.length > 0 && (
-        <div className="text-center py-12">
-          <p className="text-slate-600">Please select a target language to begin learning.</p>
-        </div>
-      )}
-      {!isLoadingLanguages && selectedTargetLanguage && !selectedNativeLanguage && nativeLanguages.length > 0 && (
-        <div className="text-center py-12">
-          <p className="text-slate-600">Please select a native language to view flashcards.</p>
-        </div>
-      )}
+            <TabsContent value="browse">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {flashcards.map((card) => (
+                  <FlashcardItem
+                    key={card.id}
+                    flashcard={card}
+                    isSelected={false}
+                    onToggle={() => {}}
+                    showCheckbox={false}
+                    targetLanguage={targetLanguage}
+                    onEdit={handleEditCard}
+                  />
+                ))}
+              </div>
+            </TabsContent>
+          </Tabs>
+        )}
+      </div>
 
+      {/* Edit Dialog */}
+      <EditFlashcardDialog
+        flashcard={currentEditCard}
+        nativeLanguage={nativeLanguage}
+        targetLanguage={targetLanguage}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        onFlashcardUpdated={refreshFlashcards}
+      />
     </div>
   )
 }

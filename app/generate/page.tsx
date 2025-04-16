@@ -7,15 +7,17 @@ import Link from "next/link"
 export default function GeneratePage({
   searchParams,
 }: {
-  searchParams: { nativeLanguage: string; targetLanguage: string; prompt: string }
+  searchParams: { nativeLanguage: string; targetLanguage: string; prompt: string; apiKey: string }
 }) {
-  // Validate required parameters directly from searchParams
-  if (!searchParams.nativeLanguage || !searchParams.targetLanguage || !searchParams.prompt) {
+  const { nativeLanguage, targetLanguage, prompt, apiKey } = searchParams
+
+  // Validate required parameters
+  if (!nativeLanguage || !targetLanguage || !prompt) {
     redirect("/")
   }
 
   return (
-    <div className="w-full max-w-3xl mx-auto py-8 px-4">
+    <div className="w-full max-w-3xl mx-auto">
       <div className="mb-6">
         <Link href="/" className="flex items-center text-slate-600 hover:text-slate-900">
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -27,16 +29,17 @@ export default function GeneratePage({
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Generated Flashcards</h1>
           <p className="text-slate-600">
-            From {searchParams.nativeLanguage} to {searchParams.targetLanguage}
+            From {nativeLanguage} to {targetLanguage}
           </p>
-          <p className="text-sm text-slate-500 mt-1">Prompt: {searchParams.prompt}</p>
+          <p className="text-sm text-slate-500 mt-1">Prompt: {prompt}</p>
         </div>
 
         <Suspense fallback={<FlashcardLoading />}>
           <FlashcardGenerator
-            nativeLanguage={searchParams.nativeLanguage}
-            targetLanguage={searchParams.targetLanguage}
-            prompt={searchParams.prompt}
+            nativeLanguage={nativeLanguage}
+            targetLanguage={targetLanguage}
+            prompt={prompt}
+            apiKey={apiKey}
           />
         </Suspense>
       </div>
