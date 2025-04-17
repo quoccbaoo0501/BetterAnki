@@ -1,7 +1,5 @@
 # Better Anki - AI Flashcard Generator
 
-![Better Anki Banner](public/banner.png) <!-- Optional: Add a banner image to public/banner.png -->
-
 Learn languages with AI-generated flashcards using spaced repetition. Like Anki, but better!
 
 This is a Next.js application bootstrapped with `create-next-app`, utilizing AI to generate language flashcards and incorporating spaced repetition learning techniques.
