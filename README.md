@@ -36,4 +36,3 @@ Visit the live application: [https://better-than-anki.vercel.app/](https://bette
     *   **Theme:** Toggle between light and dark mode using the theme icon in the navigation bar.
     *   **API Key:** (If applicable) Enter your AI provider API key via the settings dialog (gear icon) for generation.
     *   **Spaced Repetition:** Adjust the intervals for the spaced repetition system. 
-

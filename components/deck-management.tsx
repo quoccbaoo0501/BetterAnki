@@ -17,6 +17,8 @@ import {
 import type { Deck } from "@/types/deck"
 import { deleteDeck } from "@/lib/storage"
 import EditDeckDialog from "./edit-deck-dialog"
+import CSVExportDialog from "./csv-export-dialog"
+import CSVImportDialog from "./csv-import-dialog"
 
 interface DeckManagementProps {
   decks: Deck[]
@@ -91,6 +93,22 @@ export default function DeckManagement({
               <p className="text-xs text-slate-400 mt-2">
                 Last updated: {new Date(deck.updatedAt).toLocaleDateString()}
               </p>
+
+              <div className="flex space-x-2 mt-4">
+                <CSVExportDialog
+                  nativeLanguage={nativeLanguage}
+                  targetLanguage={targetLanguage}
+                  deckId={deck.id}
+                  deckName={deck.name}
+                />
+
+                <CSVImportDialog
+                  nativeLanguage={nativeLanguage}
+                  targetLanguage={targetLanguage}
+                  deckId={deck.id}
+                  onImportComplete={onDeckUpdated}
+                />
+              </div>
             </CardContent>
           </Card>
         ))}

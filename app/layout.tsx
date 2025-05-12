@@ -9,12 +9,7 @@ const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "Better Anki - AI Flashcard Generator",
-  description: "Learn languages with AI-generated flashcards using spaced repetition. Like Anki, but better!",
-  icons: {
-    icon: '/icon-betteranki.png', // Path to your favicon in the public directory
-    // Optional: Add other icons like apple-touch-icon
-    // apple: '/apple-touch-icon.png',
-  },
+  description: "Learn languages with AI-generated flashcards using spaced repetition. Like Anki, but better!"
 }
 
 export default function RootLayout({

@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Settings, ExternalLink, Clipboard, Save, Trash2, RefreshCw } from "lucide-react"
+import { Settings, ExternalLink, Clipboard, Save, Trash2, RefreshCw, RotateCcw } from "lucide-react"
 import {
   getSavedApiKey,
   saveApiKey,
@@ -15,10 +15,16 @@ import {
   getDeletedCards,
   clearDeletedCards,
   getAvailableLanguagePairs,
+  getCardOrientationPreference,
+  saveCardOrientationPreference,
+  getCustomCardSides,
+  saveCustomCardSides,
 } from "@/lib/storage"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface SettingsDialogProps {
   trigger?: React.ReactNode
@@ -32,6 +38,11 @@ export default function SettingsDialog({ trigger, onApiKeySaved }: SettingsDialo
   const [isSaving, setIsSaving] = useState(false)
   const [deletedCardsCount, setDeletedCardsCount] = useState<Record<string, number>>({})
   const [availablePairs, setAvailablePairs] = useState<{ native: string; target: string }[]>([])
+  const [cardOrientation, setCardOrientation] = useState<"native-front" | "target-front" | "custom">("native-front")
+  const [customCardSides, setCustomCardSides] = useState<{ front: string; back: string }>({
+    front: "nativeWord",
+    back: "targetWord",
+  })
 
   useEffect(() => {
     if (open && typeof window !== "undefined") {
@@ -53,6 +64,14 @@ export default function SettingsDialog({ trigger, onApiKeySaved }: SettingsDialo
         counts[key] = deletedCards.length
       })
       setDeletedCardsCount(counts)
+
+      // Load card orientation preference
+      const orientationPref = getCardOrientationPreference()
+      setCardOrientation(orientationPref)
+
+      // Load custom card sides
+      const sides = getCustomCardSides()
+      setCustomCardSides(sides)
     }
   }, [open])
 
@@ -126,6 +145,37 @@ export default function SettingsDialog({ trigger, onApiKeySaved }: SettingsDialo
     }, 3000)
   }
 
+  const handleSaveCardOrientation = () => {
+    saveCardOrientationPreference(cardOrientation)
+    setSaveMessage({ type: "success", text: "Display settings saved successfully!" })
+
+    // Clear the message after 3 seconds
+    setTimeout(() => {
+      setSaveMessage(null)
+    }, 3000)
+  }
+
+  const handleSaveCustomCardSides = () => {
+    saveCustomCardSides(customCardSides)
+    setSaveMessage({ type: "success", text: "Custom card sides saved successfully!" })
+
+    // Clear the message after 3 seconds
+    setTimeout(() => {
+      setSaveMessage(null)
+    }, 3000)
+  }
+
+  const handleResetCustomCardSides = () => {
+    setCustomCardSides({ front: "nativeWord", back: "targetWord" })
+    saveCustomCardSides({ front: "nativeWord", back: "targetWord" })
+    setSaveMessage({ type: "success", text: "Custom card sides reset to default!" })
+
+    // Clear the message after 3 seconds
+    setTimeout(() => {
+      setSaveMessage(null)
+    }, 3000)
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -142,8 +192,9 @@ export default function SettingsDialog({ trigger, onApiKeySaved }: SettingsDialo
         </DialogHeader>
 
         <Tabs defaultValue="api-key" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="api-key">API Key</TabsTrigger>
+            <TabsTrigger value="display">Display</TabsTrigger>
             <TabsTrigger value="deleted-cards">Deleted Cards</TabsTrigger>
           </TabsList>
 
@@ -217,6 +268,82 @@ export default function SettingsDialog({ trigger, onApiKeySaved }: SettingsDialo
                     Clear Key
                   </Button>
                 )}
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="display" className="space-y-6 py-4">
+            {saveMessage && (
+              <Alert variant={saveMessage.type === "success" ? "default" : "destructive"} className="mb-4">
+                <AlertDescription>{saveMessage.text}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-slate-700">Card Orientation</h3>
+              <RadioGroup value={cardOrientation} onValueChange={(value) => setCardOrientation(value as any)}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="native-front" id="native-front" />
+                  <Label htmlFor="native-front">Native language on front (default)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="target-front" id="target-front" />
+                  <Label htmlFor="target-front">Target language on front</Label>
+                </div>
+              </RadioGroup>
+
+              {cardOrientation === "custom" && (
+                <div className="mt-4 p-4 border rounded-md space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="front-side">Front Side</Label>
+                    <Select
+                      value={customCardSides.front}
+                      onValueChange={(value) => setCustomCardSides({ ...customCardSides, front: value })}
+                    >
+                      <SelectTrigger id="front-side">
+                        <SelectValue placeholder="Select front side content" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="nativeWord">Native Word</SelectItem>
+                        <SelectItem value="targetWord">Target Word</SelectItem>
+                        <SelectItem value="nativeExample">Native Example</SelectItem>
+                        <SelectItem value="targetExample">Target Example</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="back-side">Back Side</Label>
+                    <Select
+                      value={customCardSides.back}
+                      onValueChange={(value) => setCustomCardSides({ ...customCardSides, back: value })}
+                    >
+                      <SelectTrigger id="back-side">
+                        <SelectValue placeholder="Select back side content" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="nativeWord">Native Word</SelectItem>
+                        <SelectItem value="targetWord">Target Word</SelectItem>
+                        <SelectItem value="nativeExample">Native Example</SelectItem>
+                        <SelectItem value="targetExample">Target Example</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResetCustomCardSides}
+                    className="flex items-center"
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Reset to Default
+                  </Button>
+                </div>
+              )}
+
+              <div className="flex justify-end mt-4">
+                <Button onClick={handleSaveCardOrientation}>Save Display Settings</Button>
               </div>
             </div>
           </TabsContent>

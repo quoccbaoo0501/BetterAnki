@@ -730,3 +730,63 @@ export function getWordsToAvoid(nativeLanguage: string, targetLanguage: string):
     return []
   }
 }
+
+// Storage key for card orientation preference
+const CARD_ORIENTATION_KEY = `${BASE_STORAGE_KEY}_cardOrientation`
+
+// Get card orientation preference (default: native language on front)
+export function getCardOrientationPreference(): "native-front" | "target-front" | "custom" {
+  if (typeof window === "undefined") return "native-front"
+
+  try {
+    const preference = localStorage.getItem(CARD_ORIENTATION_KEY)
+    if (preference && ["native-front", "target-front", "custom"].includes(preference)) {
+      return preference as "native-front" | "target-front" | "custom"
+    }
+    return "native-front" // Default
+  } catch (error) {
+    console.error("Error retrieving card orientation preference:", error)
+    return "native-front"
+  }
+}
+
+// Save card orientation preference
+export function saveCardOrientationPreference(preference: "native-front" | "target-front" | "custom"): void {
+  if (typeof window === "undefined") return
+
+  try {
+    localStorage.setItem(CARD_ORIENTATION_KEY, preference)
+  } catch (error) {
+    console.error("Error saving card orientation preference:", error)
+  }
+}
+
+// Storage key for custom card sides
+const CUSTOM_CARD_SIDES_KEY = `${BASE_STORAGE_KEY}_customCardSides`
+
+// Get custom card sides
+export function getCustomCardSides(): { front: string; back: string } {
+  if (typeof window === "undefined") return { front: "nativeWord", back: "targetWord" }
+
+  try {
+    const sides = localStorage.getItem(CUSTOM_CARD_SIDES_KEY)
+    if (sides) {
+      return JSON.parse(sides)
+    }
+    return { front: "nativeWord", back: "targetWord" } // Default
+  } catch (error) {
+    console.error("Error retrieving custom card sides:", error)
+    return { front: "nativeWord", back: "targetWord" }
+  }
+}
+
+// Save custom card sides
+export function saveCustomCardSides(sides: { front: string; back: string }): void {
+  if (typeof window === "undefined") return
+
+  try {
+    localStorage.setItem(CUSTOM_CARD_SIDES_KEY, JSON.stringify(sides))
+  } catch (error) {
+    console.error("Error saving custom card sides:", error)
+  }
+}

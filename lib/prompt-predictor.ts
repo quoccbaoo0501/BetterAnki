@@ -1,5 +1,3 @@
-import { getSavedApiKey } from "./storage"
-
 // This function generates predicted prompts using Gemini AI
 export async function generatePredictedPrompts(
   history: Array<{
@@ -53,8 +51,12 @@ The user is currently learning ${currentTargetLanguage || "a language"} from ${c
 Previous prompts:
 ${formattedHistory}
 
-Generate 3 new, creative prompt suggestions that would be useful for language learning. Each suggestion should be concise (under 50 characters if possible) and different from the previous prompts. Return ONLY the 3 suggestions in a JSON array format like this:
-["suggestion 1", "suggestion 2", "suggestion 3"]`
+Generate 3 new, creative prompt suggestions that would be useful for language learning. Each suggestion should be concise (under 50 characters if possible) and different from the previous prompts.
+
+IMPORTANT: Return ONLY a JSON array with 3 string suggestions, like this:
+["suggestion 1", "suggestion 2", "suggestion 3"]
+
+Do not include any explanations, markdown formatting, or additional text before or after the JSON array.`
 
     // Make request to Gemini API
     const response = await fetch(`${endpoint}?key=${effectiveApiKey}`, {
@@ -87,14 +89,55 @@ Generate 3 new, creative prompt suggestions that would be useful for language le
     // Extract the text from Gemini's response
     const generatedText = data.candidates[0].content.parts[0].text
 
-    // Find the JSON array in the response
-    const jsonMatch = generatedText.match(/\[[\s\S]*\]/)
-    if (!jsonMatch) {
-      throw new Error("Could not extract JSON from Gemini response")
+    // Improved JSON extraction with multiple fallback approaches
+    let suggestions: string[] = []
+
+    try {
+      // Approach 1: Try to find a JSON array using regex
+      const jsonMatch = generatedText.match(/\[\s*"[^"]*"(?:\s*,\s*"[^"]*")*\s*\]/)
+      if (jsonMatch) {
+        suggestions = JSON.parse(jsonMatch[0])
+      }
+      // Approach 2: Look for markdown code blocks with JSON
+      else if (generatedText.includes("```json")) {
+        const markdownMatch = generatedText.match(/```json\s*([\s\S]*?)```/)
+        if (markdownMatch && markdownMatch[1]) {
+          suggestions = JSON.parse(markdownMatch[1])
+        }
+      }
+      // Approach 3: Try to parse the entire response as JSON
+      else if (generatedText.trim().startsWith("[") && generatedText.trim().endsWith("]")) {
+        suggestions = JSON.parse(generatedText)
+      }
+      // Approach 4: Extract suggestions manually by looking for patterns
+      else {
+        // Look for numbered or bulleted list items
+        const listItemMatches = generatedText.match(/(?:^|\n)(?:\d+\.\s*|\*\s*|-\s*)["'](.+?)["']/g)
+        if (listItemMatches && listItemMatches.length > 0) {
+          suggestions = listItemMatches
+            .map((item) => {
+              // Extract the text between quotes if present
+              const quoteMatch = item.match(/["'](.+?)["']/)
+              return quoteMatch ? quoteMatch[1] : item.replace(/(?:^|\n)(?:\d+\.\s*|\*\s*|-\s*)/, "").trim()
+            })
+            .filter((item) => item.length > 0)
+            .slice(0, 3)
+        }
+      }
+    } catch (error) {
+      console.error("Error parsing Gemini response:", error, "Response text:", generatedText)
     }
 
-    // Parse the JSON array
-    const suggestions: string[] = JSON.parse(jsonMatch[0])
+    // If we couldn't extract suggestions, use fallback suggestions
+    if (suggestions.length === 0) {
+      console.warn("Could not extract suggestions from Gemini response, using fallbacks")
+      return [
+        "Common phrases for daily conversation",
+        "Numbers and counting vocabulary",
+        "Travel and transportation terms",
+      ]
+    }
+
     return suggestions.slice(0, 3) // Ensure we only return 3 suggestions
   } catch (error) {
     console.error("Error generating prompt predictions:", error)
@@ -120,3 +163,26 @@ export function savePredictedPrompts(predictions: string[]): void {
 export function getCachedPredictions(): string[] {
   return cachedPredictions
 }
+
+// Generate predictions in the background and save to cache
+export function generateAndCachePredictions(nativeLanguage: string, targetLanguage: string, apiKey?: string): void {
+  if (typeof window === "undefined") return // Run this in the background without awaiting
+  ;(async () => {
+    try {
+      const history = getPromptHistory()
+      const predictions = await generatePredictedPrompts(history, nativeLanguage, targetLanguage, apiKey)
+      savePredictedPrompts(predictions)
+    } catch (error) {
+      console.error("Background prediction generation failed:", error)
+      // Use fallbacks if generation fails
+      savePredictedPrompts([
+        "Common phrases for daily conversation",
+        "Numbers and counting vocabulary",
+        "Travel and transportation terms",
+      ])
+    }
+  })()
+}
+
+// Import getPromptHistory from storage
+import { getSavedApiKey, getPromptHistory } from "./storage"

@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import FlashcardItem from "@/components/flashcard-item"
 import { Button } from "@/components/ui/button"
-import { Trash2, BookX, ChevronLeft, ChevronRight, Clock, Settings2, PlusCircle } from "lucide-react"
+import { Trash2, BookX, ChevronLeft, ChevronRight, Clock, Settings2, PlusCircle, BookOpen } from "lucide-react"
 import type { Flashcard } from "@/types/flashcard"
 import type { Deck } from "@/types/deck"
 import {
@@ -26,6 +26,9 @@ import MoveToDialog from "@/components/move-to-deck-dialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import DeckManagement from "@/components/deck-management"
 import CreateDeckDialog from "@/components/create-deck-dialog"
+import { useRouter } from "next/navigation"
+import StoryReviewGame from "@/components/story-review-game"
+import { getSavedApiKey } from "@/lib/api-key-storage"
 
 export default function LearnPage() {
   const searchParams = useSearchParams()
@@ -49,6 +52,9 @@ export default function LearnPage() {
   const [selectedDeckId, setSelectedDeckId] = useState(initialDeckId)
   const [deckManagementOpen, setDeckManagementOpen] = useState(false)
   const [cardCounts, setCardCounts] = useState<Record<string, number>>({})
+  const [isStoryReviewMode, setIsStoryReviewMode] = useState(false)
+
+  const router = useRouter()
 
   // Check if this is definition mode (same language for native and target)
   const isDefinitionMode = nativeLanguage === targetLanguage
@@ -201,6 +207,15 @@ export default function LearnPage() {
     setIsReviewMode(true)
   }
 
+  const handleStoryReviewStart = () => {
+    setIsStoryReviewMode(true)
+  }
+
+  const endStoryReview = () => {
+    setIsStoryReviewMode(false)
+    refreshFlashcards()
+  }
+
   const endReview = () => {
     setIsReviewMode(false)
     refreshFlashcards()
@@ -327,10 +342,15 @@ export default function LearnPage() {
           <p className="text-slate-600 dark:text-slate-400 mb-6">You don't have any flashcards in this deck yet.</p>
 
           <div className="flex flex-col space-y-4 items-center">
-            <Button asChild>
-              <a
-                href={`/?nativeLanguage=${encodeURIComponent(nativeLanguage)}&targetLanguage=${encodeURIComponent(targetLanguage)}`}
-              >
+            <Button
+              asChild
+              onClick={() =>
+                router.push(
+                  `/?nativeLanguage=${encodeURIComponent(nativeLanguage)}&targetLanguage=${encodeURIComponent(targetLanguage)}`,
+                )
+              }
+            >
+              <a href="#">
                 Create{" "}
                 {isDefinitionMode
                   ? `${nativeLanguage} Vocabulary`
@@ -344,7 +364,27 @@ export default function LearnPage() {
               onFlashcardAdded={refreshFlashcards}
               defaultDeckId={selectedDeckId}
             />
+
+            <Button variant="outline" size="sm" onClick={() => setDeckManagementOpen(true)}>
+              <Settings2 className="h-4 w-4 mr-2" />
+              Manage Decks
+            </Button>
           </div>
+          {/* Deck Management Dialog */}
+          <Dialog open={deckManagementOpen} onOpenChange={setDeckManagementOpen}>
+            <DialogContent className="sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>Deck Management</DialogTitle>
+              </DialogHeader>
+              <DeckManagement
+                decks={decks}
+                nativeLanguage={nativeLanguage}
+                targetLanguage={targetLanguage}
+                onDeckUpdated={handleDeckUpdated}
+                cardCounts={cardCounts}
+              />
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     )
@@ -371,6 +411,34 @@ export default function LearnPage() {
             nativeLanguage={nativeLanguage}
             targetLanguage={targetLanguage}
             onComplete={endReview}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  // Show story review mode if active
+  if (isStoryReviewMode) {
+    return (
+      <div className="w-full max-w-md mx-auto">
+        <div className="mb-6">
+          <Button variant="outline" size="sm" onClick={endStoryReview}>
+            <ChevronLeft className="h-4 w-4 mr-2" />
+            Back to Learn
+          </Button>
+        </div>
+
+        <div className="space-y-6">
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent dark:from-emerald-400 dark:to-blue-400">
+            Story Review Game
+          </h1>
+
+          <StoryReviewGame
+            flashcards={dueFlashcards.slice(0, 10)} // Limit to 10 cards
+            nativeLanguage={nativeLanguage}
+            targetLanguage={targetLanguage}
+            onComplete={endStoryReview}
+            apiKey={getSavedApiKey()}
           />
         </div>
       </div>
@@ -448,14 +516,27 @@ export default function LearnPage() {
           />
 
           {dueFlashcards.length > 0 && (
-            <Button
-              size="sm"
-              className="bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-700 dark:hover:bg-amber-600"
-              onClick={startReview}
-            >
-              <Clock className="h-4 w-4 mr-2" />
-              Review {dueFlashcards.length} Cards
-            </Button>
+            <div className="flex space-x-2">
+              <Button
+                size="sm"
+                className="bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-700 dark:hover:bg-amber-600"
+                onClick={startReview}
+              >
+                <Clock className="h-4 w-4 mr-2" />
+                Review {dueFlashcards.length} Cards
+              </Button>
+
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 dark:text-emerald-400"
+                onClick={handleStoryReviewStart}
+                disabled={dueFlashcards.length < 3}
+              >
+                <BookOpen className="h-4 w-4 mr-2" />
+                Story Review
+              </Button>
+            </div>
           )}
         </div>
 

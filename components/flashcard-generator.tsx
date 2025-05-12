@@ -7,8 +7,8 @@ import type { Deck } from "@/types/deck"
 import FlashcardItem from "@/components/flashcard-item"
 import { Button } from "@/components/ui/button"
 import { generateFlashcardsInBatches } from "@/lib/ai"
-import { saveFlashcards, savePromptToHistory, getPromptHistory, getDecks, getSavedApiKey } from "@/lib/storage"
-import { generatePredictedPrompts, savePredictedPrompts } from "@/lib/prompt-predictor"
+import { saveFlashcards, savePromptToHistory, getDecks, getSavedApiKey } from "@/lib/storage"
+import { generateAndCachePredictions } from "@/lib/prompt-predictor"
 import EditFlashcardDialog from "@/components/edit-flashcard-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
@@ -66,46 +66,38 @@ export default function FlashcardGenerator({
           // Get the effective API key (passed in or from storage)
           const effectiveApiKey = apiKey || getSavedApiKey()
 
-          // Start both requests in parallel
-          const [flashcardsPromise, predictionsPromise] = await Promise.allSettled([
-            // Request 1: Generate flashcards
-            // Use the batch function for large requests
-            generateFlashcardsInBatches(nativeLanguage, targetLanguage, prompt, effectiveApiKey),
+          try {
+            // Generate flashcards directly
+            const cards = await generateFlashcardsInBatches(nativeLanguage, targetLanguage, prompt, effectiveApiKey)
 
-            // Request 2: Predict next prompts
-            (async () => {
-              const history = getPromptHistory()
-              const predictions = await generatePredictedPrompts(
-                history,
-                nativeLanguage,
-                targetLanguage,
-                effectiveApiKey,
-              )
-              // Save predictions to cache for use in the UI
-              savePredictedPrompts(predictions)
-              return predictions
-            })(),
-          ])
-
-          // Handle flashcards result
-          if (flashcardsPromise.status === "fulfilled") {
-            const cards = flashcardsPromise.value
+            // Set the flashcards and select all by default
             setFlashcards(cards)
-            // By default, select all flashcards
             setSelectedIds(new Set(cards.map((card) => card.id)))
-          } else {
-            console.error("Failed to generate flashcards:", flashcardsPromise.reason)
-            setError(`Failed to generate flashcards: ${flashcardsPromise.reason.message || "Unknown error"}`)
-          }
-
-          // Handle predictions result (logging only, UI updates via cache)
-          if (predictionsPromise.status === "rejected") {
-            console.error("Failed to generate prompt predictions:", predictionsPromise.reason)
+          } catch (error) {
+            console.error("Failed to generate flashcards:", error)
+            setError(`Failed to generate flashcards: ${error instanceof Error ? error.message : "Unknown error"}`)
           }
         }
       } catch (error) {
         console.error("Error in fetchData:", error)
-        setError(`Error generating flashcards: ${error instanceof Error ? error.message : "Unknown error"}`)
+        let errorMessage = "Error generating flashcards: "
+
+        if (error instanceof Error) {
+          errorMessage += error.message
+
+          // Add more context for specific error types
+          if (error.message.includes("JSON")) {
+            errorMessage +=
+              ". The AI generated an invalid response format. Please try again with a simpler prompt or request fewer cards."
+          } else if (error.message.includes("API")) {
+            errorMessage +=
+              ". There was an issue connecting to the AI service. Please check your API key and try again."
+          }
+        } else {
+          errorMessage += "Unknown error"
+        }
+
+        setError(errorMessage)
       } finally {
         setIsLoading(false)
         setIsRetrying(false)
@@ -140,6 +132,10 @@ export default function FlashcardGenerator({
 
     // Save to storage with language pair and deck ID
     saveFlashcards(selectedFlashcards, nativeLanguage, targetLanguage, selectedDeckId)
+
+    // Generate predictions in the background after saving
+    // This will update the cache for the next time the user visits the create page
+    generateAndCachePredictions(nativeLanguage, targetLanguage, apiKey)
 
     // Navigate to learn page with language parameters
     router.push(
@@ -269,16 +265,30 @@ export default function FlashcardGenerator({
         )}
       </div>
 
-      {prompt.toLowerCase().includes("100") && (
+      {prompt.toLowerCase().includes("99") || prompt.toLowerCase().includes("100") || /\b\d{2,}\b/.test(prompt) ? (
         <Alert className="bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800/30">
           <AlertDescription>
             <p>
-              <strong>Note:</strong> For large requests (100+ words), the system automatically limits the response to a
-              manageable batch of high-quality flashcards. This ensures better quality and prevents errors.
+              <strong>Note:</strong> For very large requests (over 100 words), the system may automatically limit the
+              response to a manageable batch of high-quality flashcards (up to 100). This ensures better quality and
+              prevents errors.
+            </p>
+            <p className="mt-2 text-sm">
+              If you need more than 100 cards, you can make multiple requests or be more specific about the type of
+              vocabulary you need.
             </p>
           </AlertDescription>
         </Alert>
-      )}
+      ) : prompt.toLowerCase().includes("many") ? (
+        <Alert className="bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800/30">
+          <AlertDescription>
+            <p>
+              <strong>Note:</strong> For large requests, the system can generate up to 100 flashcards at once. For best
+              results, be specific about the type of vocabulary you need.
+            </p>
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {flashcards.map((card) => (
