@@ -25,7 +25,7 @@ export async function generateFlashcards(
     const existingCardCount = existingFlashcards.length
 
     // Gemini API endpoint
-    const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-05-06:generateContent"
+    const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-04-17:generateContent"
 
     // Check if this is a definition request (same language for native and target)
     const isDefinitionMode = nativeLanguage === targetLanguage
