@@ -291,7 +291,7 @@ export async function generateStoryWithBlanks(
     const limitedFlashcards = flashcards.slice(0, Math.min(7, flashcards.length))
 
     // Gemini API endpoint
-    const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-exp-03-25:generateContent"
+    const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-04-17:generateContent"
 
     // Check if this is a definition mode (same language for native and target)
     const isDefinitionMode = nativeLanguage === targetLanguage
